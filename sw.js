@@ -3,7 +3,7 @@
 // Offline support. Every file the game needs is cached on install. Requests go to the
 // network first, so a new version shows up as soon as you're online, and fall back to
 // the cache when you're not. Bump CACHE when the file list changes.
-const CACHE = 'talon-strike-v6';
+const CACHE = 'talon-strike-v7';
 const FILES = [
   './',
   'index.html',
@@ -59,6 +59,27 @@ const FILES = [
   'art/canyon/gunship.png',
   'art/canyon/jet.png',
   'art/canyon/boat.png',
+  'art/desert/pad.png',
+  'art/desert/depot.png',
+  'art/desert/bunker.png',
+  'art/temperate/pad.png',
+  'art/temperate/depot.png',
+  'art/temperate/bunker.png',
+  'art/arctic/pad.png',
+  'art/arctic/depot.png',
+  'art/arctic/bunker.png',
+  'art/jungle/pad.png',
+  'art/jungle/depot.png',
+  'art/jungle/bunker.png',
+  'art/ash/pad.png',
+  'art/ash/depot.png',
+  'art/ash/bunker.png',
+  'art/canyon/pad.png',
+  'art/canyon/depot.png',
+  'art/canyon/bunker.png',
+  'art/generator.png',
+  'art/boss.png',
+  'art/aidtruck.png',
   'src/util.js',
   'src/audio.js',
   'src/music.js',

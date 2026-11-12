@@ -152,9 +152,9 @@ Each aircraft is an entry in the `VEHICLES` list in `src/entities.js`. An entry 
 
 The four player aircraft are painted images in `art/`, generated with Pixa (Qwen Image 2.1) and cut out of their backgrounds. Their rotors, lift fans and engine glows are still drawn in code, so they spin and flare. `ART` in `src/entities.js` sets where each image sits on its aircraft's footprint and where its rotor hubs are.
 
-Enemy vehicles are painted too, once for each theatre in its own camouflage: `art/<theatre>/` holds a jeep, cargo truck, tank hull, tank turret, gunship, jet and patrol boat. The turret is a separate image so it can still turn. The jeep and boat guns, gunship rotors and the boat's missile box stay in code. `ENEMY_ART` in `src/entities.js` sets each image's footprint, and a theatre's set loads when its mission starts. The boss, aid trucks, emplacements and buildings are still drawn in code.
+Enemy vehicles and structures are painted too, once for each theatre in its own camouflage. `art/<theatre>/` holds a jeep, cargo truck, tank hull, tank turret, gunship, jet, patrol boat, sandbag emplacement pad (under SAM sites, and smaller under AA guns), fuel depot and command bunker. The generator, the boss gunship and the aid trucks have no camouflage, so they share one image each in `art/`. Parts that move stay in code: turrets, guns, the SAM launcher and radar, rotors, the generator's power glow, the bunker's flak turret and its shield. `ENEMY_ART` in `src/entities.js` sets each image's footprint, and a theatre's set loads when its mission starts.
 
-Everything else is drawn in code in `src/entities.js`, lit from the top-left to match the shadows. Each aircraft also keeps its code model as a fallback for while its image loads. Open `sprites.html` (served the same way as the game) to see the code models at 2× size.
+Everything else (the base, downed crew, projectiles, effects) is drawn in code in `src/entities.js`, lit from the top-left to match the shadows. Every painted sprite also keeps its code model as a fallback for while its image loads. Open `sprites.html` (served the same way as the game) to see the code models at 2× size.
 
 ## Missions
 

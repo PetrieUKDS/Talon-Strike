@@ -320,17 +320,22 @@ function loadArt() {
   for (const a of Object.values(ART)) if (!a.img) loadImage(a, a.src);
 }
 
-// Enemy vehicles are painted once per theatre, in its camouflage: art/<theatre>/<kind>.png.
-// Each spans x0..x1 along the vehicle's nose axis, centred across it. Parts that turn or
-// animate (guns, rotors) stay in code. A theatre's set loads when its mission starts.
+// Enemy vehicles and structures are painted once per theatre, in its camouflage:
+// art/<theatre>/<kind>.png. A few have no camouflage and share one image, art/<kind>.png.
+// Each spans x0..x1 along the nose axis, centred across it. Parts that turn or animate
+// (guns, launchers, radar, rotors, the shield) stay in code. A theatre's set loads when its
+// mission starts. The emplacement pad sits under SAM sites, and at a smaller size AA guns.
 const ENEMY_ART = {
   jeep: [-17, 14], truck: [-22, 24], tank: [-26, 26], turret: [-12, 32],
   gunship: [-52, 30], jet: [-46, 33], boat: [-16, 21],
+  pad: [-29, 29], depot: [-31, 31], bunker: [-37, 37],
+  generator: [-25, 25], boss: [-52, 30], aidtruck: [-22, 24],
 };
+const SHARED_ART = new Set(['generator', 'boss', 'aidtruck']);
 const enemyArt = {};
 
 function enemyImage(kind) {
-  const key = `${THEATRE.key}/${kind}`;
+  const key = SHARED_ART.has(kind) ? kind : `${THEATRE.key}/${kind}`;
   const a = enemyArt[key] || (enemyArt[key] = loadImage({}, `art/${key}.png`));
   return a.ready ? a : null;
 }
@@ -1691,14 +1696,14 @@ class Truck extends Enemy {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    if (this.paint || !paintGround(ctx, 'truck', f)) {
+    if (!paintGround(ctx, this.paint ? 'aidtruck' : 'truck', f)) {
       groundShadow(ctx, -22, -9, 47, 18, 3);
       this.drawBody(ctx, f);
     }
     ctx.restore();
     this.drawHealth(ctx);
   }
-  // The code-drawn truck: aid trucks always, convoy trucks until the painted image loads.
+  // The code-drawn truck, used until the painted image loads.
   drawBody(ctx, f) {
     for (const wx of [-19, -10, 15]) {
       drawWheel(ctx, wx, -10.5, 7, 3);
@@ -1890,6 +1895,16 @@ class SamSite extends Enemy {
     const f = this.hitFlash > 0;
     ctx.save();
     ctx.translate(this.x, this.y);
+    if (!paintGround(ctx, 'pad', f)) this.drawPad(ctx, f);
+    ctx.fillStyle = litFill(ctx, 0, 12, shade(THEATRE.camo.dark, 0.25), f);
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, TAU);
+    ctx.fill();
+    outlinePath(ctx);
+    this.drawLauncher(ctx, f);
+  }
+  // The code-drawn pad, used until the painted image loads.
+  drawPad(ctx, f) {
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
     ctx.arc(4, 5, 28, 0, TAU);
@@ -1919,11 +1934,9 @@ class SamSite extends Enemy {
       ctx.lineWidth = 0.6;
       ctx.strokeRect(cx - 2.5, cy - 2, 5, 4);
     }
-    ctx.fillStyle = litFill(ctx, 0, 12, shade(THEATRE.camo.dark, 0.25), f);
-    ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, TAU);
-    ctx.fill();
-    outlinePath(ctx);
+  }
+  // Radar dish and missile launcher, which turn.
+  drawLauncher(ctx, f) {
     // Rotating radar dish on its mast.
     ctx.save();
     ctx.translate(-13, -13);
@@ -2029,16 +2042,16 @@ class Gunship extends Enemy {
       g.enemyShoot(this.x, this.y, this.angle, 480, 5, 'bullet', 0.06, 24 * this.scale);
     }
   }
-  // The boss keeps its code model and its own colours; other gunships are painted.
+  // Painted: the boss has its own red airframe, other gunships the theatre's.
   drawShadow(ctx) {
     const x = this.x + 26, y = this.y + 34, s = this.scale * 0.92;
-    if (this.isBoss || !paintAt(ctx, 'gunship', x, y, this.angle, s, false, true)) {
+    if (!paintAt(ctx, this.isBoss ? 'boss' : 'gunship', x, y, this.angle, s, false, true)) {
       drawChopper(ctx, x, y, this.angle, this.rotor, { shadow: true, scale: s });
     } else this.drawMainRotor(ctx, x, y, s, true);
   }
   draw(ctx) {
     const f = this.hitFlash > 0;
-    if (this.isBoss || !paintAt(ctx, 'gunship', this.x, this.y, this.angle, this.scale, f, false)) {
+    if (!paintAt(ctx, this.isBoss ? 'boss' : 'gunship', this.x, this.y, this.angle, this.scale, f, false)) {
       drawChopper(ctx, this.x, this.y, this.angle, this.rotor, { ...this.colors, scale: this.scale, flash: f });
     } else this.drawMainRotor(ctx, this.x, this.y, this.scale, false);
     this.drawHealth(ctx);
@@ -2223,15 +2236,21 @@ class AAGun extends Enemy {
     const f = this.hitFlash > 0, C = THEATRE.camo;
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath();
-    ctx.arc(3, 4, 18, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = litFill(ctx, 0, 14, shade(C.ground, -0.25), f);
-    ctx.beginPath();
-    ctx.arc(0, 0, 14, 0, TAU);
-    ctx.fill();
-    drawSandbags(ctx, 11, 14.5, f);
+    ctx.save();
+    ctx.scale(0.56, 0.56);
+    const painted = paintGround(ctx, 'pad', f);
+    ctx.restore();
+    if (!painted) {
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.arc(3, 4, 18, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = litFill(ctx, 0, 14, shade(C.ground, -0.25), f);
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, TAU);
+      ctx.fill();
+      drawSandbags(ctx, 11, 14.5, f);
+    }
     ctx.rotate(this.turret);
     ctx.fillStyle = '#25272a';
     ctx.fillRect(4, -4, 16, 2);
@@ -2279,6 +2298,13 @@ class FuelDepot extends Enemy {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
+    if (!paintGround(ctx, 'depot', f)) this.drawDepot(ctx, f, C);
+    ctx.restore();
+    this.drawHealth(ctx);
+  }
+  // The code-drawn depot, used until the painted image loads.
+  drawDepot(ctx, f, C) {
+    ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
     ctx.roundRect(-28, -22, 62, 50, 5);
@@ -2329,7 +2355,6 @@ class FuelDepot extends Enemy {
     ctx.fillStyle = '#c0392b';
     ctx.fillRect(-1.5, -1.5, 3, 3);
     ctx.restore();
-    this.drawHealth(ctx);
   }
 }
 
@@ -2502,6 +2527,21 @@ class Generator extends Enemy {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
+    if (!paintGround(ctx, 'generator', f)) this.drawUnit(ctx, f);
+    // Power arcing off the coil.
+    const pulse = 0.4 + 0.4 * Math.sin(this.fan * 0.9);
+    const gl = ctx.createRadialGradient(-8, 0, 0, -8, 0, 14);
+    gl.addColorStop(0, `rgba(140,210,255,${pulse})`);
+    gl.addColorStop(1, 'rgba(80,160,255,0)');
+    ctx.fillStyle = gl;
+    ctx.beginPath();
+    ctx.arc(-8, 0, 14, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+    this.drawHealth(ctx);
+  }
+  // The code-drawn generator, used until the painted image loads.
+  drawUnit(ctx, f) {
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
     ctx.roundRect(-22, -15, 50, 38, 4);
@@ -2538,17 +2578,6 @@ class Generator extends Enemy {
       ctx.lineTo(14 + Math.cos(a) * 6.5, Math.sin(a) * 6.5);
     }
     ctx.stroke();
-    // Power arcing off the coil.
-    const pulse = 0.4 + 0.4 * Math.sin(this.fan * 0.9);
-    const gl = ctx.createRadialGradient(-8, 0, 0, -8, 0, 14);
-    gl.addColorStop(0, `rgba(140,210,255,${pulse})`);
-    gl.addColorStop(1, 'rgba(80,160,255,0)');
-    ctx.fillStyle = gl;
-    ctx.beginPath();
-    ctx.arc(-8, 0, 14, 0, TAU);
-    ctx.fill();
-    ctx.restore();
-    this.drawHealth(ctx);
   }
 }
 
@@ -2622,6 +2651,21 @@ class Bunker extends Enemy {
       }
       ctx.closePath();
     };
+    if (!paintGround(ctx, 'bunker', f)) this.drawWalls(ctx, f, C, oct);
+    // Radio mast.
+    ctx.strokeStyle = '#2a2c2e';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-14, 14); ctx.lineTo(-24, 24);
+    ctx.stroke();
+    ctx.fillStyle = Math.floor(performance.now() / 500) % 2 ? '#ff4030' : '#601810';
+    ctx.beginPath();
+    ctx.arc(-24, 24, 2, 0, TAU);
+    ctx.fill();
+    this.drawTurret(ctx, f, C);
+  }
+  // The code-drawn walls and roof, used until the painted image loads.
+  drawWalls(ctx, f, C, oct) {
     ctx.save();
     ctx.translate(5, 6);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -2648,17 +2692,9 @@ class Bunker extends Enemy {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fillRect(-18, -20, 8, 5);
     ctx.fillRect(10, 15, 8, 5);
-    // Radio mast.
-    ctx.strokeStyle = '#2a2c2e';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(-14, 14); ctx.lineTo(-24, 24);
-    ctx.stroke();
-    ctx.fillStyle = Math.floor(performance.now() / 500) % 2 ? '#ff4030' : '#601810';
-    ctx.beginPath();
-    ctx.arc(-24, 24, 2, 0, TAU);
-    ctx.fill();
-    // Quad flak turret.
+  }
+  // Quad flak turret, then the shield dome while the generators run.
+  drawTurret(ctx, f, C) {
     ctx.save();
     ctx.rotate(this.turret);
     ctx.fillStyle = '#25272a';
