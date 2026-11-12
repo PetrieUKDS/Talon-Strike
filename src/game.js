@@ -247,6 +247,7 @@ const G = {
     Music.play(this.mission.music);
     this.difficulty = strength * Save.difficulty().enemy;
     setTheatre(this.mission.theatre, this.mission.seed);
+    preloadEnemyArt();
     Weather.set(THEATRE.weather, this.w, this.h, this.lowFx() ? 0.5 : 1);
     this.base = this.findBase();
     this.missionStartScore = this.score;

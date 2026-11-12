@@ -105,12 +105,12 @@ const THEATRES = {
   },
 };
 
-let THEATRE = THEATRES.temperate;
+let THEATRE = { ...THEATRES.temperate, key: 'temperate' };
 
 // Switch the world to a theatre. A mission can pass its own seed to get a different
 // map in the same theatre. The terrain cache must be reset afterwards.
 function setTheatre(name, seed) {
-  THEATRE = seed ? { ...THEATRES[name], seed } : THEATRES[name];
+  THEATRE = { ...THEATRES[name], key: name, ...(seed ? { seed } : {}) };
   Noise.seed(THEATRE.seed);
 }
 

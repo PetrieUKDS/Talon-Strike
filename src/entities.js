@@ -292,29 +292,87 @@ const ART = {
   },
 };
 
-// Each image also gets a black and a white copy, for its ground shadow and hit flashes.
-function loadArt() {
-  for (const a of Object.values(ART)) {
-    if (a.img) continue;
-    a.img = new Image();
-    a.img.onload = () => {
-      const tint = (color) => {
-        const c = document.createElement('canvas');
-        c.width = a.img.width;
-        c.height = a.img.height;
-        const x = c.getContext('2d');
-        x.drawImage(a.img, 0, 0);
-        x.globalCompositeOperation = 'source-in';
-        x.fillStyle = color;
-        x.fillRect(0, 0, c.width, c.height);
-        return c;
-      };
-      a.sil = tint('#000000');
-      a.white = tint('#ffffff');
-      a.ready = true;
+// Load an image into a, with a black and a white copy for its shadow and hit flashes.
+// a.ready turns true once it's loaded; a missing file just leaves the code model in use.
+function loadImage(a, src) {
+  a.img = new Image();
+  a.img.onload = () => {
+    const tint = (color) => {
+      const c = document.createElement('canvas');
+      c.width = a.img.width;
+      c.height = a.img.height;
+      const x = c.getContext('2d');
+      x.drawImage(a.img, 0, 0);
+      x.globalCompositeOperation = 'source-in';
+      x.fillStyle = color;
+      x.fillRect(0, 0, c.width, c.height);
+      return c;
     };
-    a.img.src = a.src;
-  }
+    a.sil = tint('#000000');
+    a.white = tint('#ffffff');
+    a.ready = true;
+  };
+  a.img.src = src;
+  return a;
+}
+
+function loadArt() {
+  for (const a of Object.values(ART)) if (!a.img) loadImage(a, a.src);
+}
+
+// Enemy vehicles are painted once per theatre, in its camouflage: art/<theatre>/<kind>.png.
+// Each spans x0..x1 along the vehicle's nose axis, centred across it. Parts that turn or
+// animate (guns, rotors) stay in code. A theatre's set loads when its mission starts.
+const ENEMY_ART = {
+  jeep: [-17, 14], truck: [-22, 24], tank: [-26, 26], turret: [-12, 32],
+  gunship: [-52, 30], jet: [-46, 33], boat: [-16, 21],
+};
+const enemyArt = {};
+
+function enemyImage(kind) {
+  const key = `${THEATRE.key}/${kind}`;
+  const a = enemyArt[key] || (enemyArt[key] = loadImage({}, `art/${key}.png`));
+  return a.ready ? a : null;
+}
+
+function preloadEnemyArt() {
+  for (const kind of Object.keys(ENEMY_ART)) enemyImage(kind);
+}
+
+// Draw an enemy's painted part in the current transform; false (draw nothing) if not loaded.
+// shadow: draw its silhouette at that opacity instead (true means the air shadow's 0.22).
+function paintPart(ctx, kind, flash, shadow) {
+  const a = enemyImage(kind);
+  if (!a) return false;
+  const [x0, x1] = ENEMY_ART[kind];
+  const L = x1 - x0, H = (L * a.img.height) / a.img.width;
+  if (shadow) {
+    ctx.globalAlpha = shadow === true ? 0.22 : shadow;
+    ctx.drawImage(a.sil, x0, -H / 2, L, H);
+    ctx.globalAlpha = 1;
+  } else ctx.drawImage(flash ? a.white : a.img, x0, -H / 2, L, H);
+  return true;
+}
+
+// A painted ground vehicle: its own outline as a soft shadow down-right, then the vehicle.
+function paintGround(ctx, kind, flash) {
+  if (!enemyImage(kind)) return false;
+  ctx.save();
+  ctx.translate(3, 4);
+  paintPart(ctx, kind, false, 0.28);
+  ctx.restore();
+  return paintPart(ctx, kind, flash);
+}
+
+// A painted aircraft at a world position and angle (gunships and jets).
+function paintAt(ctx, kind, x, y, angle, scale, flash, shadow) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+  const ok = paintPart(ctx, kind, flash, shadow);
+  ctx.restore();
+  return ok;
 }
 
 // Draw a painted aircraft like the code models (same arguments); false if its image isn't ready.
@@ -1523,7 +1581,29 @@ class Jeep extends Enemy {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    groundShadow(ctx, -14, -8, 29, 16, 3);
+    if (!paintGround(ctx, 'jeep', f)) {
+      groundShadow(ctx, -14, -8, 29, 16, 3);
+      this.drawBody(ctx, f);
+    }
+    // Gunner and pintle machine gun, which turns independently.
+    ctx.translate(-6, 0);
+    ctx.rotate(this.turret - this.angle);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(1, -0.8, 13, 1.6);
+    ctx.fillRect(2, -1.8, 4, 3.6);
+    ctx.fillStyle = f ? '#fff' : THEATRE.camo.dark;
+    ctx.beginPath();
+    ctx.arc(-1, 0, 3, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath();
+    ctx.arc(-1.8, -0.9, 1.2, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+    this.drawHealth(ctx);
+  }
+  // The code-drawn jeep, used until its painted image loads.
+  drawBody(ctx, f) {
     for (const wx of [-11, 5]) {
       drawWheel(ctx, wx, -9.5, 7, 3);
       drawWheel(ctx, wx, 6.5, 7, 3);
@@ -1558,22 +1638,6 @@ class Jeep extends Enemy {
     ctx.fill();
     ctx.fillStyle = '#2b2b26';
     ctx.fillRect(-1.5, -6.5, 1.5, 13);
-    // Gunner and pintle machine gun, which turns independently.
-    ctx.translate(-6, 0);
-    ctx.rotate(this.turret - this.angle);
-    ctx.fillStyle = '#222';
-    ctx.fillRect(1, -0.8, 13, 1.6);
-    ctx.fillRect(2, -1.8, 4, 3.6);
-    ctx.fillStyle = f ? '#fff' : THEATRE.camo.dark;
-    ctx.beginPath();
-    ctx.arc(-1, 0, 3, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    ctx.beginPath();
-    ctx.arc(-1.8, -0.9, 1.2, 0, TAU);
-    ctx.fill();
-    ctx.restore();
-    this.drawHealth(ctx);
   }
 }
 
@@ -1627,7 +1691,15 @@ class Truck extends Enemy {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    groundShadow(ctx, -22, -9, 47, 18, 3);
+    if (this.paint || !paintGround(ctx, 'truck', f)) {
+      groundShadow(ctx, -22, -9, 47, 18, 3);
+      this.drawBody(ctx, f);
+    }
+    ctx.restore();
+    this.drawHealth(ctx);
+  }
+  // The code-drawn truck: aid trucks always, convoy trucks until the painted image loads.
+  drawBody(ctx, f) {
     for (const wx of [-19, -10, 15]) {
       drawWheel(ctx, wx, -10.5, 7, 3);
       drawWheel(ctx, wx, 7.5, 7, 3);
@@ -1667,8 +1739,6 @@ class Truck extends Enemy {
     ctx.beginPath();
     ctx.moveTo(-21, 0); ctx.lineTo(9, 0);
     ctx.stroke();
-    ctx.restore();
-    this.drawHealth(ctx);
   }
 }
 
@@ -1716,7 +1786,17 @@ class Tank extends Enemy {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    groundShadow(ctx, -22, -16, 44, 32, 4);
+    if (!paintGround(ctx, 'tank', f)) {
+      groundShadow(ctx, -22, -16, 44, 32, 4);
+      this.drawHull(ctx, f);
+    }
+    ctx.rotate(this.turret - this.angle);
+    if (!paintPart(ctx, 'turret', f)) this.drawTurret(ctx, f);
+    ctx.restore();
+    this.drawHealth(ctx);
+  }
+  // The code-drawn hull and turret, used until the painted images load.
+  drawHull(ctx, f) {
     // Tracks, with links that roll as the tank moves.
     for (const ty of [-15.5, 8.5]) {
       ctx.fillStyle = '#23241e';
@@ -1745,8 +1825,9 @@ class Tank extends Enemy {
     }
     ctx.moveTo(16, -10); ctx.lineTo(16, 10);
     ctx.stroke();
-    // Turret, barrel with muzzle brake, and the commander's hatch.
-    ctx.rotate(this.turret - this.angle);
+  }
+  // Turret, barrel with muzzle brake, and the commander's hatch.
+  drawTurret(ctx, f) {
     ctx.fillStyle = litFill(ctx, this.turret, 3, shade(THEATRE.camo.main, -0.15), f);
     ctx.fillRect(6, -2, 23, 4);
     ctx.fillRect(28, -3, 4, 6);
@@ -1766,8 +1847,6 @@ class Tank extends Enemy {
     ctx.stroke();
     ctx.fillStyle = '#222';
     ctx.fillRect(-1, 3, 7, 1.2);
-    ctx.restore();
-    this.drawHealth(ctx);
   }
 }
 
@@ -1950,12 +2029,29 @@ class Gunship extends Enemy {
       g.enemyShoot(this.x, this.y, this.angle, 480, 5, 'bullet', 0.06, 24 * this.scale);
     }
   }
+  // The boss keeps its code model and its own colours; other gunships are painted.
   drawShadow(ctx) {
-    drawChopper(ctx, this.x + 26, this.y + 34, this.angle, this.rotor, { shadow: true, scale: this.scale * 0.92 });
+    const x = this.x + 26, y = this.y + 34, s = this.scale * 0.92;
+    if (this.isBoss || !paintAt(ctx, 'gunship', x, y, this.angle, s, false, true)) {
+      drawChopper(ctx, x, y, this.angle, this.rotor, { shadow: true, scale: s });
+    } else this.drawMainRotor(ctx, x, y, s, true);
   }
   draw(ctx) {
-    drawChopper(ctx, this.x, this.y, this.angle, this.rotor, { ...this.colors, scale: this.scale, flash: this.hitFlash > 0 });
+    const f = this.hitFlash > 0;
+    if (this.isBoss || !paintAt(ctx, 'gunship', this.x, this.y, this.angle, this.scale, f, false)) {
+      drawChopper(ctx, this.x, this.y, this.angle, this.rotor, { ...this.colors, scale: this.scale, flash: f });
+    } else this.drawMainRotor(ctx, this.x, this.y, this.scale, false);
     this.drawHealth(ctx);
+  }
+  // The spinning main rotor over a painted gunship's hub.
+  drawMainRotor(ctx, x, y, s, shadow) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(this.angle);
+    ctx.scale(s, s);
+    ctx.translate(-4, 0);
+    drawRotor(ctx, 38, 4, this.rotor, shadow);
+    ctx.restore();
   }
 }
 
@@ -2057,10 +2153,15 @@ class Jet extends Enemy {
     }
   }
   drawShadow(ctx) {
-    drawJetShape(ctx, this.x + 40, this.y + 52, this.angle, { shadow: true, scale: 0.9 });
+    if (!paintAt(ctx, 'jet', this.x + 40, this.y + 52, this.angle, 0.9, false, true)) {
+      drawJetShape(ctx, this.x + 40, this.y + 52, this.angle, { shadow: true, scale: 0.9 });
+    }
   }
   draw(ctx) {
-    drawJetShape(ctx, this.x, this.y, this.angle, { body: THEATRE.camo.jet, flash: this.hitFlash > 0 });
+    const f = this.hitFlash > 0;
+    if (!paintAt(ctx, 'jet', this.x, this.y, this.angle, 1, f, false)) {
+      drawJetShape(ctx, this.x, this.y, this.angle, { body: THEATRE.camo.jet, flash: f });
+    }
   }
 }
 
@@ -2328,11 +2429,35 @@ class PatrolBoat extends Enemy {
       ctx.ellipse(-22, 0, 10, 4.5, 0, 0, TAU);
       ctx.fill();
     }
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    if (!paintGround(ctx, 'boat', f)) {
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(3, 4, 21, 8, 0, 0, TAU);
+      ctx.fill();
+      this.drawHull(ctx, f, C);
+    }
+    // Stern missile box.
+    if (this.missileBoat) {
+      ctx.fillStyle = f ? '#fff' : C.dark;
+      ctx.fillRect(-15, -4, 6, 8);
+      ctx.fillStyle = '#b83020';
+      ctx.fillRect(-9.5, -3, 1.2, 2);
+      ctx.fillRect(-9.5, 1, 1.2, 2);
+    }
+    // Bow gun.
+    ctx.translate(11, 0);
+    ctx.rotate(this.turret - this.angle);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(0, -0.8, 10, 1.6);
+    ctx.fillStyle = f ? '#fff' : C.dark;
     ctx.beginPath();
-    ctx.ellipse(3, 4, 21, 8, 0, 0, TAU);
+    ctx.arc(0, 0, 3, 0, TAU);
     ctx.fill();
-    // Hull and deck.
+    ctx.restore();
+    this.drawHealth(ctx);
+  }
+  // The code-drawn hull and wheelhouse, used until the painted image loads.
+  drawHull(ctx, f, C) {
     ctx.fillStyle = litFill(ctx, this.angle, 8, C.cover, f);
     ctx.beginPath();
     ctx.moveTo(21, 0);
@@ -2354,25 +2479,6 @@ class PatrolBoat extends Enemy {
     outlinePath(ctx);
     ctx.fillStyle = glassFill(ctx, this.angle, 4, '#26323a');
     ctx.fillRect(1.5, -3.5, 1.6, 7);
-    // Stern missile box.
-    if (this.missileBoat) {
-      ctx.fillStyle = f ? '#fff' : C.dark;
-      ctx.fillRect(-15, -4, 6, 8);
-      ctx.fillStyle = '#b83020';
-      ctx.fillRect(-9.5, -3, 1.2, 2);
-      ctx.fillRect(-9.5, 1, 1.2, 2);
-    }
-    // Bow gun.
-    ctx.translate(11, 0);
-    ctx.rotate(this.turret - this.angle);
-    ctx.fillStyle = '#222';
-    ctx.fillRect(0, -0.8, 10, 1.6);
-    ctx.fillStyle = f ? '#fff' : C.dark;
-    ctx.beginPath();
-    ctx.arc(0, 0, 3, 0, TAU);
-    ctx.fill();
-    ctx.restore();
-    this.drawHealth(ctx);
   }
 }
 
