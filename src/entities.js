@@ -1884,7 +1884,7 @@ class Boss extends Gunship {
       g.delayed.push({ t: i * 0.2, x: this.x + rand(-60, 60), y: this.y + rand(-60, 60), size: rand(30, 55) });
     }
     g.delayed.push({ t: 2, x: this.x, y: this.y, size: 110, ring: true });
-    g.banner('RED TALON DOWN', HUD_AMBER);
+    g.banner(`${this.name} DOWN`, HUD_AMBER);
   }
   attack(dt, g, t, engaged) {
     this.cd -= dt;

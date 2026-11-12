@@ -49,7 +49,7 @@ python -m http.server 8000
 
 Then go to http://localhost:8000 (or whatever port `serve` prints).
 
-Your campaign progress, star ratings, funds, upgrades, difficulty, settings, best scores, key bindings and chosen aircraft are saved in the browser's `localStorage`, so each browser and device keeps its own save.
+Your campaign progress, contract rank and daily streak, star ratings, funds, upgrades, difficulty, settings, best scores, key bindings and chosen aircraft are saved in the browser's `localStorage`, so each browser and device keeps its own save.
 
 ## Controls
 
@@ -176,6 +176,27 @@ After the hangar you pick a mission. Clearing a mission unlocks the next one, an
 
 After the ninth mission the campaign starts over with tougher enemies, and the Viper is unlocked in the hangar.
 
+### Contracts
+
+Clear Operation Frostbite and **CONTRACTS** opens at the bottom of mission select (T, or click it). Contracts are endless generated missions. Each one is built from a seed: a theatre, a fresh island, one of the nine objective types (SAM sites, fuel depots, gunboats, shield bunker, ace hunt, rescue, base defence, convoy or escort), and sometimes a second objective that arrives as new orders halfway through.
+
+- **Rank:** you start at rank 1. Each rank makes enemies tougher, adds targets and raises the pay. Clearing a contract takes you to the rank after it.
+- **The board:** two offers at your rank and a **HIGH RISK** one two ranks up, which jumps you three ranks if you clear it. **NEW BOARD** (R) deals fresh offers for 300 funds.
+- **Twists:** higher ranks bring more of them, and each pays extra:
+
+  | Twist | Effect |
+  | --- | --- |
+  | NIGHT | Flown at night |
+  | NO FLARES | No flares fitted |
+  | SWARM | Reinforcements twice as fast |
+  | BLITZ | Hard time limit; the clock shows it instead of par |
+  | THIN ARMOUR | You take 50% more damage |
+
+- **Daily contract:** a rank 5 contract that's the same for everyone on a given day. It pays double, once a day, and clearing it on consecutive days builds a streak.
+- **Workshop:** upgrade level 4 goes on sale at contract rank 5, and level 5 at rank 10.
+
+Your rank, board, daily result and streak are saved with the campaign. The generator is in `src/contracts.js`; a new objective type is one more entry in `CONTRACT_OBJECTIVES`.
+
 ### Star ratings
 
 Each cleared mission earns up to three stars, and each bonus star adds 1500 to your score (and so to your workshop funds):
@@ -202,10 +223,12 @@ The points you score in a mission become funds. After each win you go to the wor
 
 | Upgrade | Per level | Costs |
 | --- | --- | --- |
-| Armour plating | +15% armour | 1500 / 3000 / 5000 |
-| Gun cooling | −15% gun heat | 1200 / 2500 / 4500 |
-| Missile racks | +2 missiles | 1500 / 3000 / 5000 |
-| Flare pods | +1 flare | 800 / 1600 / 3000 |
-| Engine tuning | +6% speed | 1500 / 3000 / 5000 |
+| Armour plating | +15% armour | 1500 / 3000 / 5000 / 8000 / 12000 |
+| Gun cooling | −15% gun heat | 1200 / 2500 / 4500 / 7000 / 10000 |
+| Missile racks | +2 missiles | 1500 / 3000 / 5000 / 8000 / 12000 |
+| Flare pods | +1 flare | 800 / 1600 / 3000 / 5000 / 7500 |
+| Engine tuning | +6% speed | 1500 / 3000 / 5000 / 8000 / 12000 |
+
+Levels 4 and 5 unlock at contract ranks 5 and 10.
 
 Theatres (palette, weather, landmarks) are defined in `THEATRES` in `src/terrain.js`, missions (with their par times) in `src/missions.js`, difficulty, upgrades and settings in `src/progress.js`, and weather and night lighting in `src/weather.js`. Friendly units (aid trucks, downed crew, the base's command building) are at the end of `src/entities.js`.

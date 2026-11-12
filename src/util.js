@@ -37,6 +37,17 @@ function mulberry32(a) {
   };
 }
 
+// Run fn with Math.random seeded, so the same seed lays out the same mission.
+function withSeed(seed, fn) {
+  const real = Math.random;
+  Math.random = mulberry32(seed);
+  try {
+    return fn();
+  } finally {
+    Math.random = real;
+  }
+}
+
 // Deterministic 0..1 hash of two integers.
 function hash2(x, y) {
   let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0;

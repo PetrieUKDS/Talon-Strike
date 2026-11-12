@@ -11,13 +11,17 @@ const DIFFICULTIES = [
 ];
 
 // Workshop upgrades. They apply to whichever aircraft you fly; costs are per level.
+// Levels 4 and 5 unlock at contract ranks UPGRADE_RANKS[0] and [1].
 const UPGRADES = [
-  { id: 'armor', name: 'ARMOUR PLATING', desc: '+15% armour', costs: [1500, 3000, 5000] },
-  { id: 'cooling', name: 'GUN COOLING', desc: '-15% gun heat', costs: [1200, 2500, 4500] },
-  { id: 'racks', name: 'MISSILE RACKS', desc: '+2 missiles', costs: [1500, 3000, 5000] },
-  { id: 'flares', name: 'FLARE PODS', desc: '+1 flare', costs: [800, 1600, 3000] },
-  { id: 'engine', name: 'ENGINE TUNING', desc: '+6% speed', costs: [1500, 3000, 5000] },
+  { id: 'armor', name: 'ARMOUR PLATING', desc: '+15% armour', costs: [1500, 3000, 5000, 8000, 12000] },
+  { id: 'cooling', name: 'GUN COOLING', desc: '-15% gun heat', costs: [1200, 2500, 4500, 7000, 10000] },
+  { id: 'racks', name: 'MISSILE RACKS', desc: '+2 missiles', costs: [1500, 3000, 5000, 8000, 12000] },
+  { id: 'flares', name: 'FLARE PODS', desc: '+1 flare', costs: [800, 1600, 3000, 5000, 7500] },
+  { id: 'engine', name: 'ENGINE TUNING', desc: '+6% speed', costs: [1500, 3000, 5000, 8000, 12000] },
 ];
+const UPGRADE_RANKS = [5, 10];
+
+const newBoardSeed = () => 1 + Math.floor(Math.random() * 2147483646);
 
 const SAVE_KEY = 'chopperGunner.save';
 const SETTINGS_KEY = 'chopperGunner.settings';
@@ -101,9 +105,76 @@ const Save = {
     this.write();
   },
 
+  // How many upgrade levels are on sale: three, plus one for each contract rank milestone.
+  maxLevel() {
+    return 3 + UPGRADE_RANKS.filter((r) => this.contracts().rank >= r).length;
+  },
+
+  // Undefined when the upgrade is maxed out or its next level is still locked.
   nextCost(id) {
     const u = UPGRADES.find((x) => x.id === id);
+    if (this.level(id) >= this.maxLevel()) return undefined;
     return u.costs[this.level(id)];
+  },
+
+  // ---------------------------------------------------------- contracts
+
+  contractsOpen() {
+    return this.data.unlocked >= 4 || this.data.campaignDone;
+  },
+
+  // rank: the rank of the next ordinary contracts. board: seed of the current offers.
+  contracts() {
+    if (!this.data.contracts) this.data.contracts = { rank: 1, board: newBoardSeed(), cleared: 0, top: 0 };
+    return this.data.contracts;
+  },
+
+  // Today's daily contract record, starting a fresh one each day.
+  daily() {
+    const today = todayKey();
+    if (!this.data.daily || this.data.daily.date !== today) this.data.daily = { date: today, best: 0, done: false };
+    return this.data.daily;
+  },
+
+  // Days in a row with the daily contract cleared, counting today or yesterday as the latest.
+  streak() {
+    const s = this.data.streak;
+    if (!s || (s.last !== todayKey() && s.last !== todayKey(-1))) return 0;
+    return s.count;
+  },
+
+  newBoard() {
+    this.contracts().board = newBoardSeed();
+    this.write();
+  },
+
+  reroll() {
+    if (this.data.funds < REROLL_COST) return false;
+    this.data.funds -= REROLL_COST;
+    this.newBoard();
+    return true;
+  },
+
+  // Record a cleared contract. Ordinary ones raise your rank past the one you cleared and
+  // deal a new board; the daily one counts towards your streak, once a day.
+  contractCleared(info, earned, score) {
+    const c = this.contracts();
+    this.data.funds += earned;
+    c.cleared++;
+    if (info.kind === 'daily') {
+      const d = this.daily();
+      d.best = Math.max(d.best, score);
+      if (!d.done) {
+        d.done = true;
+        const s = this.data.streak;
+        this.data.streak = { count: s && s.last === todayKey(-1) ? s.count + 1 : 1, last: todayKey() };
+      }
+    } else {
+      c.rank = Math.max(c.rank, info.rank + 1);
+      c.top = Math.max(c.top, info.rank);
+      c.board = newBoardSeed();
+    }
+    this.write();
   },
 
   buy(id) {

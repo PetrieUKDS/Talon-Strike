@@ -81,8 +81,10 @@ const Hud = {
     ctx.restore();
 
     // --- score, and the mission clock against par (green while you're still under it)
-    const clock = `${fmtTime(g.missionTime)} / PAR ${fmtTime(g.mission.par)}`;
-    const clockCol = g.missionTime <= g.mission.par ? HUD_GREEN : '#9fb4c0';
+    // A contract with a hard time limit shows the time left instead, red in the last 30 seconds.
+    const lim = g.mission.limit;
+    const clock = lim ? `${fmtTime(g.missionTime)} / LIMIT ${fmtTime(lim)}` : `${fmtTime(g.missionTime)} / PAR ${fmtTime(g.mission.par)}`;
+    const clockCol = lim && lim - g.missionTime < 30 ? HUD_RED : g.missionTime <= g.mission.par ? HUD_GREEN : '#9fb4c0';
     const rx = w - 78 - safe.r;
     if (small) {
       this.text(ctx, String(g.score).padStart(7, '0'), rx, 162 + safe.t, { size: 16, align: 'center', color: '#ffffff' });

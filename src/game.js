@@ -224,10 +224,27 @@ const G = {
 
   startMission(i) {
     this.missionIndex = i;
-    this.mission = MISSIONS[i % MISSIONS.length];
-    Music.play(this.mission.music);
+    this.contract = null;
     const tour = Math.floor(i / MISSIONS.length);
-    this.difficulty = (1 + (i % MISSIONS.length) * 0.08 + tour * 0.4) * Save.difficulty().enemy;
+    this.launch(MISSIONS[i % MISSIONS.length], 1 + (i % MISSIONS.length) * 0.08 + tour * 0.4, i === 0 && Settings.data.tutorial);
+  },
+
+  // A contract from the board or the daily one (see contracts.js). Its rank sets enemy strength.
+  startContract(m) {
+    this.contract = m;
+    this.launch(m, 0.95 + 0.09 * m.contract.rank, false);
+  },
+
+  retry() {
+    this.score = this.missionStartScore;
+    if (this.contract) this.startContract(this.contract);
+    else this.startMission(this.missionIndex);
+  },
+
+  launch(mission, strength, tutorial) {
+    this.mission = mission;
+    Music.play(this.mission.music);
+    this.difficulty = strength * Save.difficulty().enemy;
     setTheatre(this.mission.theatre, this.mission.seed);
     Weather.set(THEATRE.weather, this.w, this.h, this.lowFx() ? 0.5 : 1);
     this.base = this.findBase();
@@ -247,11 +264,12 @@ const G = {
     this.hurtFlash = 0;
     this.damageTaken = 0;
     this.missionTime = 0;
-    this.tut = i === 0 && Settings.data.tutorial ? { step: 0, fired: 0, missile: false, flare: false, padT: 0, flash: 0 } : null;
+    this.tut = tutorial ? { step: 0, fired: 0, missile: false, flare: false, padT: 0, flash: 0 } : null;
     this.terrain.reset();
     this.player = new Player(this.base.x, this.base.y, this.vehicle, Save.mods());
     this.aimMode = 'keys';
-    this.mission.setup(this);
+    if (this.mission.setupSeed) withSeed(this.mission.setupSeed, () => this.mission.setup(this));
+    else this.mission.setup(this);
     this.reinforceT = this.mission.reinforce.every;
     this.cam.x = this.player.x;
     this.cam.y = this.player.y;
@@ -614,6 +632,9 @@ const G = {
       case 'workshop':
         this.updateWorkshop();
         break;
+      case 'contracts':
+        this.updateContracts();
+        break;
       case 'briefing':
         this.player.rotor += dt * 40;
         if (this.stateT > 0.5 && Input.confirm()) {
@@ -650,13 +671,16 @@ const G = {
       case 'complete':
       case 'failed':
         this.updateWorld(dt);
-        if (this.stateT > 1.2 && Input.confirm()) {
+        if (this.stateT < 1.2) break;
+        if (this.state === 'failed' && (Input.hit('Escape') || (this.tapHit() || {}).kind === 'back')) {
+          Sfx.beep();
+          this.score = this.missionStartScore;
+          if (this.contract) this.openContracts();
+          else this.openMissions();
+        } else if (Input.confirm()) {
           Sfx.confirm();
-          if (this.state === 'complete') this.openWorkshop(this.missionIndex + 1);
-          else {
-            this.score = this.missionStartScore;
-            this.startMission(this.missionIndex);
-          }
+          if (this.state === 'complete') this.openWorkshop(this.contract ? 'contracts' : this.missionIndex + 1);
+          else this.retry();
         }
         break;
     }
@@ -723,7 +747,7 @@ const G = {
 
   // Opens the feedback form in a new tab, or in this one if pop-ups are blocked.
   openFeedback() {
-    const m = MISSIONS[this.missionIndex];
+    const m = this.mission;
     const q = new URLSearchParams({
       input: Input.touchMode ? 'touch' : Input.pad ? 'gamepad' : 'keyboard',
       screen: `${Math.round(this.w)}x${Math.round(this.h)}`,
@@ -914,15 +938,20 @@ const G = {
 
   updateMissions() {
     const max = Save.data.unlocked - 1;
+    // Selectable rows: the unlocked missions, then the contracts row once it's open.
+    const rows = Array.from({ length: max + 1 }, (_, i) => i);
+    if (Save.contractsOpen()) rows.push(MISSIONS.length);
     const move = (d) => {
-      this.menuSel = clamp(this.menuSel + d, 0, max);
+      this.menuSel = rows[clamp(rows.indexOf(this.menuSel) + d, 0, rows.length - 1)];
       Sfx.beep();
     };
     const launch = (i) => {
       Sfx.confirm();
       this.score = 0;
-      this.startMission(i);
+      if (i === MISSIONS.length) this.openContracts();
+      else this.startMission(i);
     };
+    if (Input.hit('KeyT') && Save.contractsOpen()) return launch(MISSIONS.length);
     if (Input.hit('ArrowUp') || Input.hit('KeyW')) move(-1);
     if (Input.hit('ArrowDown') || Input.hit('KeyS')) move(1);
     if (Input.hit('ArrowLeft') || Input.hit('KeyA')) Save.setDifficulty(-1);
@@ -933,7 +962,7 @@ const G = {
     if (this.stateT > 0.3 && (Input.hit('Space') || Input.hit('Enter'))) return launch(this.menuSel);
     const hit = this.tapHit();
     if (!hit) return;
-    if (hit.kind === 'row' && hit.i <= max) {
+    if (hit.kind === 'row' && rows.includes(hit.i)) {
       if (hit.i === this.menuSel) launch(hit.i);
       else this.menuSel = hit.i;
     } else if (hit.kind === 'diff') Save.setDifficulty(hit.d);
@@ -967,7 +996,7 @@ const G = {
     hits.push({ kind: 'diff', d: -1, x: dx - 70, y: y - 20, w: 36, h: 28 }, { kind: 'diff', d: 1, x: dx + 34, y: y - 20, w: 36, h: 28 });
     y += short ? 12 : 18;
 
-    const rowH = clamp((h - y - (short ? 50 : 110)) / MISSIONS.length, 22, 54);
+    const rowH = clamp((h - y - (short ? 50 : 110)) / (MISSIONS.length + 1), 22, 54);
     const compact = rowH < 36; // short screens: one line per mission
     MISSIONS.forEach((m, i) => {
       const ry = y + i * rowH;
@@ -998,9 +1027,10 @@ const G = {
       }
       hits.push({ kind: 'row', i, x: x0, y: ry, w: pw, h: rowH - 4 });
     });
+    this.drawContractsRow(ctx, x0, y + MISSIONS.length * rowH, pw, rowH, compact, small, hits);
 
     // Buttons.
-    const by = y + MISSIONS.length * rowH + (short ? 4 : 10);
+    const by = y + (MISSIONS.length + 1) * rowH + (short ? 4 : 10);
     const bh = short ? 30 : 32;
     const btn = (label, kind, bx, bw, color) => {
       ctx.strokeStyle = color;
@@ -1015,9 +1045,201 @@ const G = {
     btn('SETTINGS', 'settings', x0 + (bw + gap) * 2, bw, '#c8d6dc');
     btn('LAUNCH', 'launch', x0 + pw - bw, bw, HUD_GREEN);
     if (!Input.touchMode && by + 58 < h) {
-      Hud.text(ctx, '↑↓ MISSION   ←→ DIFFICULTY   SPACE LAUNCH   U WORKSHOP   O SETTINGS   ESC BACK', w / 2, by + 58, { size: 12, align: 'center', color: '#9fb4c0' });
+      Hud.text(ctx, `↑↓ MISSION   ←→ DIFFICULTY   SPACE LAUNCH   ${Save.contractsOpen() ? 'T CONTRACTS   ' : ''}U WORKSHOP   O SETTINGS   ESC BACK`, w / 2, by + 58, { size: 12, align: 'center', color: '#9fb4c0' });
     }
     this.menuHits = hits;
+  },
+
+  // The last row of mission select: the way into contracts, or what unlocks them.
+  drawContractsRow(ctx, x0, ry, pw, rowH, compact, small, hits) {
+    const i = MISSIONS.length;
+    const open = Save.contractsOpen();
+    const sel = this.menuSel === i;
+    ctx.fillStyle = sel ? 'rgba(94,200,255,0.14)' : 'rgba(94,200,255,0.05)';
+    ctx.fillRect(x0, ry, pw, rowH - 4);
+    if (sel) {
+      ctx.strokeStyle = '#5ec8ff';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x0 + 0.5, ry + 0.5, pw - 1, rowH - 5);
+    }
+    const mid = ry + rowH / 2;
+    const col = open ? (sel ? '#ffffff' : '#c8d6dc') : 'rgba(200,214,220,0.35)';
+    Hud.text(ctx, '∞', x0 + 18, mid + (compact ? 5 : 7), { size: compact ? 16 : 22, align: 'center', weight: '700', color: open ? '#5ec8ff' : col });
+    const rank = Save.contracts().rank;
+    const done = Save.daily().done;
+    if (compact) {
+      Hud.text(ctx, 'CONTRACTS', x0 + 40, mid + 4, { size: 12, color: col });
+      Hud.text(ctx, open ? `RANK ${rank}` : 'LOCKED', x0 + pw - 12, mid + 4, { size: 12, align: 'right', color: open ? '#5ec8ff' : col });
+    } else {
+      Hud.text(ctx, 'CONTRACTS', x0 + 40, mid - (small ? 1 : 3), { size: small ? 12 : 15, color: col });
+      const sub = open ? (small ? 'Endless generated missions' : 'Endless generated missions, harder and better paid every rank') : `Clear ${MISSIONS[2].title} to unlock`;
+      Hud.text(ctx, sub, x0 + 40, mid + (small ? 13 : 15), { size: 11, color: open ? '#9fb4c0' : col });
+      if (open) {
+        Hud.text(ctx, `RANK ${rank}`, x0 + pw - 12, mid - 3, { size: small ? 13 : 16, align: 'right', color: '#5ec8ff' });
+        Hud.text(ctx, done ? 'DAILY DONE' : 'DAILY READY', x0 + pw - 12, mid + 13, { size: small ? 10 : 12, align: 'right', color: done ? '#9fb4c0' : HUD_GREEN });
+      } else Hud.text(ctx, 'LOCKED', x0 + pw - 12, mid + 5, { size: small ? 10 : 12, align: 'right', color: col });
+    }
+    hits.push({ kind: 'row', i, x: x0, y: ry, w: pw, h: rowH - 4 });
+  },
+
+  // ------------------------------------------------------------ contracts
+
+  // The board: today's daily contract, two at your rank and a high-risk one two ranks up.
+  openContracts() {
+    const c = Save.contracts();
+    this.board = [
+      dailyContract(),
+      makeContract(subSeed(c.board, 1), c.rank),
+      makeContract(subSeed(c.board, 2), c.rank),
+      makeContract(subSeed(c.board, 3), c.rank + 2, 'risk'),
+    ];
+    this.boardSel = clamp(this.boardSel || 0, 0, this.board.length - 1);
+    this.menuHits = null;
+    this.setState('contracts');
+  },
+
+  updateContracts() {
+    const n = this.board.length;
+    const launch = (i) => {
+      Sfx.confirm();
+      this.score = 0;
+      this.boardSel = i;
+      this.startContract(this.board[i]);
+    };
+    const reroll = () => {
+      if (Save.reroll()) {
+        Sfx.pickup();
+        this.openContracts();
+      } else Sfx.overheat();
+    };
+    if (Input.hit('ArrowUp') || Input.hit('KeyW')) {
+      this.boardSel = (this.boardSel + n - 1) % n;
+      Sfx.beep();
+    }
+    if (Input.hit('ArrowDown') || Input.hit('KeyS') || Input.hit('Tab')) {
+      this.boardSel = (this.boardSel + 1) % n;
+      Sfx.beep();
+    }
+    if (Input.hit('ArrowLeft') || Input.hit('KeyA')) Save.setDifficulty(-1);
+    if (Input.hit('ArrowRight') || Input.hit('KeyD')) Save.setDifficulty(1);
+    if (Input.hit('KeyR')) return reroll();
+    if (Input.hit('KeyU')) return this.openWorkshop('contracts');
+    if (Input.hit('KeyO')) return this.openSettings();
+    if (Input.hit('Escape')) return this.openMissions();
+    if (this.stateT > 0.3 && (Input.hit('Space') || Input.hit('Enter'))) return launch(this.boardSel);
+    const hit = this.tapHit();
+    if (!hit) return;
+    if (hit.kind === 'row') {
+      if (hit.i === this.boardSel) launch(hit.i);
+      else this.boardSel = hit.i;
+    } else if (hit.kind === 'diff') Save.setDifficulty(hit.d);
+    else if (hit.kind === 'launch') launch(this.boardSel);
+    else if (hit.kind === 'reroll') reroll();
+    else if (hit.kind === 'workshop') this.openWorkshop('contracts');
+    else if (hit.kind === 'back') this.openMissions();
+  },
+
+  drawContracts(ctx) {
+    this.dim(ctx, 0.72);
+    const w = this.w, h = this.h;
+    const small = w < 600;
+    const short = h < 520;
+    const pw = Math.min(640, w - 24);
+    const x0 = (w - pw) / 2;
+    const hits = [];
+    const c = Save.contracts();
+    let y = short ? 26 : Math.max(40, h * 0.07);
+    Hud.text(ctx, 'CONTRACTS', w / 2, y, { size: short ? 18 : small ? 20 : 28, align: 'center', font: TITLE_FONT, weight: '900', color: '#5ec8ff' });
+    y += short ? 22 : small ? 26 : 34;
+    const streak = Save.streak();
+    const streakText = streak ? `   STREAK ${streak} ${streak > 1 ? 'DAYS' : 'DAY'}` : '';
+    Hud.text(ctx, `${this.vehicle.name}   RANK ${c.rank}   FUNDS ${Save.data.funds}${streakText}`, w / 2, y, { size: short ? 12 : 13, align: 'center', color: '#9fb4c0' });
+    y += short ? 22 : 26;
+
+    const diff = Save.difficulty();
+    Hud.text(ctx, 'DIFFICULTY', w / 2 - 70, y, { size: 14, align: 'right', color: '#c8d6dc' });
+    const dx = w / 2 + 40;
+    Hud.text(ctx, '◀', dx - 52, y, { size: 16, align: 'center', color: HUD_GREEN });
+    Hud.text(ctx, diff.name, dx, y, { size: 16, align: 'center', color: diff.id === 'hard' ? HUD_RED : diff.id === 'easy' ? '#5ec8ff' : HUD_GREEN });
+    Hud.text(ctx, '▶', dx + 52, y, { size: 16, align: 'center', color: HUD_GREEN });
+    hits.push({ kind: 'diff', d: -1, x: dx - 70, y: y - 20, w: 36, h: 28 }, { kind: 'diff', d: 1, x: dx + 34, y: y - 20, w: 36, h: 28 });
+    y += short ? 12 : 18;
+
+    const rowH = clamp((h - y - (short ? 44 : 110)) / this.board.length, 40, 78);
+    const roomy = rowH >= 62;
+    const third = roomy || rowH >= 52; // room for the details line
+    const daily = Save.daily();
+    this.board.forEach((m, i) => {
+      const info = m.contract;
+      const ry = y + i * rowH;
+      const sel = i === this.boardSel;
+      const tint = info.kind === 'daily' ? '255,192,74' : info.kind === 'risk' ? '255,90,90' : '94,200,255';
+      ctx.fillStyle = `rgba(${tint},${sel ? 0.14 : 0.05})`;
+      ctx.fillRect(x0, ry, pw, rowH - 6);
+      if (sel) {
+        ctx.strokeStyle = `rgb(${tint})`;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x0 + 0.5, ry + 0.5, pw - 1, rowH - 7);
+      }
+      const tag = info.kind === 'daily' ? 'DAILY CONTRACT' : info.kind === 'risk' ? 'HIGH RISK' : `OFFER ${i}`;
+      const lh = roomy ? 18 : 14;
+      const top = ry + (third ? (roomy ? 18 : 14) : 14);
+      Hud.text(ctx, tag, x0 + 12, top, { size: 11, color: `rgb(${tint})` });
+      Hud.text(ctx, m.title, x0 + 12, top + lh, { size: small ? 12 : 15, color: sel ? '#ffffff' : '#c8d6dc' });
+      const what = [THEATRES[m.theatre].label, info.labels.join(' + ')];
+      if (info.twist) what.push(info.twist.label);
+      if (third) Hud.text(ctx, what.join('  ·  '), x0 + 12, top + lh * 2, { size: 11, color: info.twist ? '#ff9b8a' : '#9fb4c0' });
+      // Right side: rank and pay, or for the daily one whether it's been paid out today.
+      const rx = x0 + pw - 12;
+      Hud.text(ctx, `RANK ${info.rank}`, rx, top, { size: 11, align: 'right', color: '#9fb4c0' });
+      const paid = info.kind === 'daily' && daily.done;
+      Hud.text(ctx, paid ? 'CLEARED TODAY' : `PAY ${info.pay}`, rx, top + lh, { size: small ? 12 : 15, align: 'right', color: paid ? '#9fb4c0' : HUD_GREEN });
+      if (third && paid && daily.best) Hud.text(ctx, `BEST ${daily.best}`, rx, top + lh * 2, { size: 11, align: 'right', color: HUD_AMBER });
+      else if (third && info.kind === 'risk' && !small) Hud.text(ctx, `CLEAR FOR RANK ${info.rank + 1}`, rx, top + lh * 2, { size: 11, align: 'right', color: '#ff9b8a' });
+      hits.push({ kind: 'row', i, x: x0, y: ry, w: pw, h: rowH - 6 });
+    });
+
+    const by = y + this.board.length * rowH + (short ? 0 : 8);
+    const bh = short ? 30 : 32;
+    const btn = (label, kind, bx, bw, color) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(bx, by, bw, bh);
+      Hud.text(ctx, label, bx + bw / 2, by + bh / 2 + 5, { size: short || small ? 12 : 14, align: 'center', color });
+      hits.push({ kind, x: bx, y: by, w: bw, h: bh });
+    };
+    const gap = 8, bw = (pw - gap * 3) / 4;
+    btn('BACK', 'back', x0, bw, '#c8d6dc');
+    btn('WORKSHOP', 'workshop', x0 + bw + gap, bw, '#5ec8ff');
+    btn(small ? `NEW ${REROLL_COST}` : `NEW BOARD ${REROLL_COST}`, 'reroll', x0 + (bw + gap) * 2, bw, Save.data.funds >= REROLL_COST ? HUD_AMBER : 'rgba(255,90,90,0.7)');
+    btn('LAUNCH', 'launch', x0 + pw - bw, bw, HUD_GREEN);
+    if (!Input.touchMode && by + 58 < h) {
+      Hud.text(ctx, '↑↓ CONTRACT   ←→ DIFFICULTY   SPACE LAUNCH   R NEW BOARD   U WORKSHOP   ESC BACK', w / 2, by + 58, { size: 12, align: 'center', color: '#9fb4c0' });
+    }
+    this.menuHits = hits;
+  },
+
+  drawContractComplete(ctx) {
+    const info = this.contract.contract;
+    const lines = [
+      starString(this.lastStars) + `   Time ${fmtTime(this.missionTime)}`,
+      ...this.bonuses.map((b) => `${b.got ? '★' : '☆'} ${b.label}${b.got ? '  +' + BONUS_STAR : ''}`),
+      '',
+      info.kind === 'daily' && !this.lastPay ? 'Daily pay already collected today' : `Contract pay ${this.lastPay}`,
+      `Score ${this.score - this.missionStartScore}   Kills ${this.kills}`,
+      `Earned ${this.lastEarned}   Funds ${Save.data.funds}`,
+      '',
+    ];
+    if (info.kind === 'daily') {
+      const s = Save.streak();
+      lines.push(`DAILY STREAK: ${s} ${s === 1 ? 'DAY' : 'DAYS'}`, 'A new daily contract arrives tomorrow.');
+    } else {
+      const rank = Save.contracts().rank;
+      lines.push(`CONTRACT RANK ${rank}`);
+      if (UPGRADE_RANKS.some((r) => r > this.rankBefore && r <= rank)) lines.push('NEW UPGRADE LEVEL IN THE WORKSHOP');
+    }
+    lines.push('', 'PRESS SPACE / TAP FOR THE WORKSHOP');
+    this.drawCenterPanel(ctx, 'CONTRACT COMPLETE', lines);
   },
 
   // ------------------------------------------------------------ workshop
@@ -1032,6 +1254,7 @@ const G = {
   leaveWorkshop() {
     Sfx.confirm();
     if (this.shop.next === 'missions') this.openMissions();
+    else if (this.shop.next === 'contracts') this.openContracts();
     else this.startMission(this.shop.next);
   },
 
@@ -1070,6 +1293,10 @@ const G = {
     y += 22;
     Hud.text(ctx, 'Upgrades fit every aircraft in the hangar.', w / 2, y, { size: 12, align: 'center', color: '#9fb4c0' });
     y += 22;
+    if (Save.contractsOpen() && Save.maxLevel() < 5) {
+      Hud.text(ctx, `Level ${Save.maxLevel() + 1} goes on sale at contract rank ${UPGRADE_RANKS[Save.maxLevel() - 3]}.`, w / 2, y - 4, { size: 12, align: 'center', color: '#5ec8ff' });
+      y += 18;
+    }
     const rowH = small ? 46 : 54;
     UPGRADES.forEach((u, i) => {
       const ry = y + i * rowH;
@@ -1087,12 +1314,22 @@ const G = {
       const mid = ry + (rowH - 6) / 2;
       Hud.text(ctx, u.name, x0 + 14, mid - 3, { size: small ? 13 : 15, color: sel ? '#ffffff' : '#c8d6dc' });
       Hud.text(ctx, `${u.desc} per level`, x0 + 14, mid + 13, { size: 11, color: '#9fb4c0' });
+      // Levels past the ones on sale are drawn as empty outlines.
       for (let k = 0; k < u.costs.length; k++) {
-        ctx.fillStyle = k < lvl ? HUD_GREEN : 'rgba(255,255,255,0.15)';
-        ctx.fillRect(x0 + pw * 0.55 + k * 16, mid - 6, 11, 12);
+        const px = x0 + pw * 0.5 + k * 16;
+        if (k < Save.maxLevel()) {
+          ctx.fillStyle = k < lvl ? HUD_GREEN : 'rgba(255,255,255,0.15)';
+          ctx.fillRect(px, mid - 6, 11, 12);
+        } else {
+          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px + 0.5, mid - 5.5, 10, 11);
+        }
       }
-      const label = cost === undefined ? 'MAX' : `${cost}`;
-      Hud.text(ctx, label, x0 + pw - 14, mid + 5, { size: 14, align: 'right', color: cost === undefined ? HUD_GREEN : afford ? HUD_AMBER : HUD_RED });
+      const lockRank = UPGRADE_RANKS[lvl - 3];
+      const label = cost !== undefined ? `${cost}` : lvl >= u.costs.length ? 'MAX' : `RANK ${lockRank}`;
+      const labelCol = cost !== undefined ? (afford ? HUD_AMBER : HUD_RED) : lvl >= u.costs.length ? HUD_GREEN : '#9fb4c0';
+      Hud.text(ctx, label, x0 + pw - 14, mid + 5, { size: 14, align: 'right', color: labelCol });
       hits.push({ kind: 'upgrade', i, x: x0, y: ry, w: pw, h: rowH - 6 });
     });
     const by = y + UPGRADES.length * rowH + 8;
@@ -1100,7 +1337,7 @@ const G = {
     ctx.strokeStyle = cs ? HUD_AMBER : HUD_GREEN;
     ctx.lineWidth = cs ? 2 : 1.5;
     ctx.strokeRect(x0 + pw / 2 - 110, by, 220, 34);
-    const nextLabel = this.shop.next === 'missions' ? 'DONE' : 'CONTINUE TO BRIEFING';
+    const nextLabel = this.shop.next === 'missions' || this.shop.next === 'contracts' ? 'DONE' : 'CONTINUE TO BRIEFING';
     Hud.text(ctx, nextLabel, w / 2, by + 22, { size: 14, align: 'center', color: cs ? HUD_AMBER : HUD_GREEN });
     hits.push({ kind: 'continue', x: x0 + pw / 2 - 110, y: by, w: 220, h: 34 });
     if (!Input.touchMode) {
@@ -1113,7 +1350,10 @@ const G = {
     const s = this.mission.status(this);
     if (s === 'won') {
       this.result = 'won';
-      this.score += 1000 * ((this.missionIndex % MISSIONS.length) + 1);
+      const c = this.contract && this.contract.contract;
+      // Contracts pay their fee; the daily one pays only on its first clear of the day.
+      this.lastPay = c ? (c.kind === 'daily' && Save.daily().done ? 0 : c.pay) : 1000 * ((this.missionIndex % MISSIONS.length) + 1);
+      this.score += this.lastPay;
       // Bonus stars: one for beating par time, one for losing less than half your armour.
       const p = this.player;
       this.bonuses = [
@@ -1124,8 +1364,10 @@ const G = {
       this.lastStars = 1 + this.bonuses.filter((b) => b.got).length;
       this.saveBest();
       this.lastEarned = this.score - this.missionStartScore;
-      Save.cleared(this.missionIndex, this.lastEarned, this.lastStars);
-      this.banner('MISSION COMPLETE', HUD_AMBER);
+      this.rankBefore = Save.contracts().rank;
+      if (c) Save.contractCleared(c, this.lastEarned, this.score - this.missionStartScore);
+      else Save.cleared(this.missionIndex, this.lastEarned, this.lastStars);
+      this.banner(c ? 'CONTRACT COMPLETE' : 'MISSION COMPLETE', HUD_AMBER);
       this.setState('complete');
     } else if (s === 'lost') {
       this.result = 'lost';
@@ -1404,7 +1646,7 @@ const G = {
     for (const f of this.flares) if (inView(f)) f.draw(ctx);
     ctx.globalCompositeOperation = 'source-over';
 
-    if (this.mission.night && !['title', 'hangar', 'missions'].includes(this.state)) Weather.drawNight(ctx, this);
+    if (this.mission.night && !['title', 'hangar', 'missions', 'contracts'].includes(this.state)) Weather.drawNight(ctx, this);
 
     for (const f of this.floaters) {
       ctx.globalAlpha = clamp(f.t, 0, 1);
@@ -1424,6 +1666,7 @@ const G = {
       case 'hangar': this.drawHangar(ctx); break;
       case 'missions': this.drawMissions(ctx); break;
       case 'workshop': this.drawWorkshop(ctx); break;
+      case 'contracts': this.drawContracts(ctx); break;
       case 'settings':
         if (this.prefs.from === 'title') this.dim(ctx, 0.3);
         this.drawSettings(ctx);
@@ -1721,7 +1964,10 @@ const G = {
     const x = (w - pw) / 2;
     let y = Math.max(60, h * 0.2);
     const tour = Math.floor(this.missionIndex / MISSIONS.length);
-    Hud.text(ctx, `SKYWATCH SECURE BRIEFING - ${THEATRE.label}${tour ? ' - TOUR ' + (tour + 1) : ''}`, x, y, { size: 13, color: '#9fb4c0' });
+    const c = this.contract && this.contract.contract;
+    const head = c ? `SKYWATCH ${c.kind === 'daily' ? 'DAILY ' : ''}CONTRACT - RANK ${c.rank} - ${THEATRE.label}${c.twist ? ' - ' + c.twist.label : ''}`
+      : `SKYWATCH SECURE BRIEFING - ${THEATRE.label}${tour ? ' - TOUR ' + (tour + 1) : ''}`;
+    Hud.text(ctx, head, x, y, { size: 13, color: c && c.twist ? HUD_RED : '#9fb4c0' });
     y += 34;
     Hud.text(ctx, this.mission.title, x, y, { size: small ? 20 : 30, font: TITLE_FONT, weight: '700', color: HUD_AMBER });
     y += 36;
@@ -1819,10 +2065,12 @@ const G = {
       Hud.text(ctx, l, w / 2, y, { size: small ? 13 : 16, align: 'center', color: '#d6e2e8' });
       y += 24;
     }
+    return y;
   },
 
   drawComplete(ctx) {
     if (this.stateT < 1) return;
+    if (this.contract) return this.drawContractComplete(ctx);
     const last = (this.missionIndex + 1) % MISSIONS.length === 0;
     const lines = [
       starString(this.lastStars) + `   Time ${fmtTime(this.missionTime)}`,
@@ -1840,7 +2088,18 @@ const G = {
   drawFailed(ctx) {
     const title = this.result === 'down' ? `${this.vehicle.name} DOWN` : 'MISSION FAILED';
     const why = this.result === 'down' ? 'Your armor gave out.' : this.mission.failText || 'The objective was lost.';
-    this.drawCenterPanel(ctx, title, [why, '', 'PRESS SPACE / TAP TO RETRY'], HUD_RED);
+    const lines = [why, '', 'PRESS SPACE / TAP TO RETRY'];
+    if (!Input.touchMode) lines.push(`ESC FOR ${this.contract ? 'THE CONTRACT BOARD' : 'MISSION SELECT'}`);
+    const bottom = this.drawCenterPanel(ctx, title, lines, HUD_RED);
+    // A button back to the menu, for touch screens with no Esc key.
+    this.menuHits = null;
+    if (this.stateT < 1.2) return;
+    const bw = 220, bx = this.w / 2 - bw / 2, by = Math.min(this.h - 44, bottom + 8);
+    ctx.strokeStyle = '#c8d6dc';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx, by, bw, 34);
+    Hud.text(ctx, this.contract ? 'CONTRACT BOARD' : 'MISSION SELECT', this.w / 2, by + 22, { size: 14, align: 'center', color: '#c8d6dc' });
+    this.menuHits = [{ kind: 'back', x: bx, y: by, w: bw, h: 34 }];
   },
 };
 
