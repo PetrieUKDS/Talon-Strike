@@ -99,6 +99,7 @@ const G = {
     window.addEventListener('resize', () => this.resize());
     this.resize();
     Input.init(this.canvas);
+    loadArt();
     Save.load();
     Settings.load();
     setTheatre(MISSIONS[0].theatre);

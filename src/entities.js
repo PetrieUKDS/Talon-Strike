@@ -266,6 +266,122 @@ function drawRotor(ctx, R, blades, rotor, shadow) {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------- painted sprites
+
+// Painted aircraft in art/ (generated with Pixa, backgrounds cut out). Each image is laid over
+// its code model's footprint: x0..x1 along the nose axis (+x), with cy the image's centreline
+// as a share of its height. Rotors and fans stay in code so they spin: fx/fy place their hubs
+// as shares of the image. Until an image loads, or if it fails, the code model is drawn instead.
+const ART = {
+  stormwolf: {
+    src: 'art/stormwolf.png', x0: -52, x1: 30, cy: 0.49, rotors: [{ fx: 0.56, fy: 0.47, R: 38, blades: 4 }],
+    turbo: { x: -20, r: 24 },
+  },
+  kestrel: {
+    src: 'art/kestrel.png', x0: -45, x1: 22, cy: 0.42, rotors: [{ fx: 0.59, fy: 0.4, R: 32, blades: 3 }],
+    turbo: { x: -13, r: 16 },
+  },
+  titan: {
+    src: 'art/titan.png', x0: -41, x1: 38, cy: 0.49, turbo: { x: -40, r: 26 },
+    rotors: [{ fx: 0.67, fy: 0.48, R: 30, blades: 3 }, { fx: 0.09, fy: 0.49, R: 30, blades: 3, reverse: true }],
+  },
+  viper: {
+    src: 'art/viper.png', x0: -42, x1: 31, cy: 0.5,
+    fans: [{ fx: 0.46, fy: 0.18, r: 6 }, { fx: 0.46, fy: 0.83, r: 6, reverse: true }],
+    jet: { x: -36 }, // the nozzle glows all the time, brighter on turbo
+  },
+};
+
+// Each image also gets a black and a white copy, for its ground shadow and hit flashes.
+function loadArt() {
+  for (const a of Object.values(ART)) {
+    if (a.img) continue;
+    a.img = new Image();
+    a.img.onload = () => {
+      const tint = (color) => {
+        const c = document.createElement('canvas');
+        c.width = a.img.width;
+        c.height = a.img.height;
+        const x = c.getContext('2d');
+        x.drawImage(a.img, 0, 0);
+        x.globalCompositeOperation = 'source-in';
+        x.fillStyle = color;
+        x.fillRect(0, 0, c.width, c.height);
+        return c;
+      };
+      a.sil = tint('#000000');
+      a.white = tint('#ffffff');
+      a.ready = true;
+    };
+    a.img.src = a.src;
+  }
+}
+
+// Draw a painted aircraft like the code models (same arguments); false if its image isn't ready.
+function drawArt(key, ctx, x, y, angle, rotor, o) {
+  const a = ART[key];
+  if (!a || !a.ready) return false;
+  const L = a.x1 - a.x0, H = (L * a.img.height) / a.img.width;
+  const shadow = !!o.shadow;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.scale(o.scale || 1, o.scale || 1);
+  const top = -a.cy * H;
+  // Turbo: the engines' heat glow, under the airframe as the code models draw it.
+  if (!shadow && o.turbo && a.turbo) {
+    const t = a.turbo, gr = ctx.createRadialGradient(t.x + 3, 0, 0, t.x + 3, 0, t.r);
+    gr.addColorStop(0, 'rgba(255,230,160,0.95)');
+    gr.addColorStop(0.35, 'rgba(255,130,40,0.6)');
+    gr.addColorStop(1, 'rgba(255,60,0,0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.arc(t.x, 0, t.r, 0, TAU);
+    ctx.fill();
+  }
+  if (shadow) {
+    ctx.globalAlpha = 0.22;
+    ctx.drawImage(a.sil, a.x0, top, L, H);
+    ctx.globalAlpha = 1;
+  } else ctx.drawImage(o.flash ? a.white : a.img, a.x0, top, L, H);
+  if (!shadow && a.jet) {
+    const glow = o.turbo ? 22 : 9;
+    const gr = ctx.createRadialGradient(a.jet.x + 2, 0, 0, a.jet.x + 2, 0, glow);
+    gr.addColorStop(0, 'rgba(170,240,255,0.95)');
+    gr.addColorStop(0.4, o.turbo ? 'rgba(80,170,255,0.7)' : 'rgba(80,170,255,0.4)');
+    gr.addColorStop(1, 'rgba(40,80,255,0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.arc(a.jet.x, 0, glow, 0, TAU);
+    ctx.fill();
+  }
+  const at = (p) => [a.x0 + p.fx * L, top + p.fy * H];
+  for (const f of (!shadow && a.fans) || []) {
+    const [fx, fy] = at(f);
+    ctx.strokeStyle = 'rgba(190,230,240,0.35)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (let b = 0; b < 5; b++) {
+      const ang = rotor * 1.6 * (f.reverse ? -1 : 1) + (b * TAU) / 5;
+      ctx.moveTo(fx, fy);
+      ctx.lineTo(fx + Math.cos(ang) * f.r, fy + Math.sin(ang) * f.r);
+    }
+    ctx.stroke();
+  }
+  for (const r of a.rotors || []) {
+    ctx.save();
+    ctx.translate(...at(r));
+    drawRotor(ctx, r.R, r.blades, r.reverse ? -rotor + 0.5 : rotor, shadow);
+    ctx.restore();
+  }
+  ctx.restore();
+  return true;
+}
+
+// A draw function that uses the painted sprite when it's ready and the code model otherwise.
+const artOr = (key, fallback) => (ctx, x, y, angle, rotor, o) =>
+  drawArt(key, ctx, x, y, angle, rotor, o) || fallback(ctx, x, y, angle, rotor, o);
+
 // Light scout helicopter: slim body, bubble canopy, skids and a shrouded tail rotor.
 function drawScout(ctx, x, y, angle, rotor, o) {
   const s = o.scale || 1;
@@ -1020,7 +1136,7 @@ const VEHICLES = {
     name: 'STORMWOLF',
     role: 'ATTACK HELICOPTER',
     blurb: 'The all-rounder. Solid armour, a good missile load and twin wing guns.',
-    draw: drawChopper,
+    draw: artOr('stormwolf', drawChopper),
     colors: { body: '#1b1f24', dark: '#2c3238', accent: '#e9ecef', glass: '#294d66' },
     r: 20,
     hp: 100,
@@ -1036,7 +1152,7 @@ const VEHICLES = {
     name: 'KESTREL',
     role: 'SCOUT HELICOPTER',
     blurb: 'Fast and nimble with a fast-firing gun and extra flares, but light armour.',
-    draw: drawScout,
+    draw: artOr('kestrel', drawScout),
     colors: { body: '#c4c9ce', dark: '#6f7880', accent: '#ff8a1f', glass: '#2b5a78' },
     r: 16,
     hp: 65,
@@ -1052,7 +1168,7 @@ const VEHICLES = {
     name: 'TITAN',
     role: 'HEAVY GUNSHIP',
     blurb: 'A flying tank. Huge armour and missile load, heavy guns, slow to turn.',
-    draw: drawHeavy,
+    draw: artOr('titan', drawHeavy),
     colors: { body: '#2b3a52', dark: '#1a2433', accent: '#e0b84a', glass: '#3a5a6e' },
     r: 26,
     hp: 170,
@@ -1069,7 +1185,7 @@ const VEHICLES = {
     name: 'VIPER',
     role: 'PROTOTYPE JET-COPTER',
     blurb: 'Skywatch\'s reward: jet speed, ducted-fan agility and a long-range laser that runs cool.',
-    draw: drawViper,
+    draw: artOr('viper', drawViper),
     colors: { body: '#262b33', dark: '#161a20', accent: '#3fd8ff', glass: '#1f4a5c' },
     unlock: 'campaign',
     r: 19,

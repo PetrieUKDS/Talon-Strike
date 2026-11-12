@@ -150,7 +150,9 @@ Each aircraft is an entry in the `VEHICLES` list in `src/entities.js`. An entry 
 
 ## Sprites
 
-Every sprite is drawn in code in `src/entities.js`, lit from the top-left to match the shadows. Open `sprites.html` (served the same way as the game) to see them all at 2× size.
+The four player aircraft are painted images in `art/`, generated with Pixa (Qwen Image 2.1) and cut out of their backgrounds. Their rotors, lift fans and engine glows are still drawn in code, so they spin and flare. `ART` in `src/entities.js` sets where each image sits on its aircraft's footprint and where its rotor hubs are.
+
+Everything else is drawn in code in `src/entities.js`, lit from the top-left to match the shadows. Each aircraft also keeps its code model as a fallback for while its image loads. Open `sprites.html` (served the same way as the game) to see the code models at 2× size.
 
 ## Missions
 

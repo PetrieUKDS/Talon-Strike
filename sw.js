@@ -3,7 +3,7 @@
 // Offline support. Every file the game needs is cached on install. Requests go to the
 // network first, so a new version shows up as soon as you're online, and fall back to
 // the cache when you're not. Bump CACHE when the file list changes.
-const CACHE = 'talon-strike-v4';
+const CACHE = 'talon-strike-v5';
 const FILES = [
   './',
   'index.html',
@@ -13,6 +13,10 @@ const FILES = [
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/apple-touch-icon.png',
+  'art/stormwolf.png',
+  'art/kestrel.png',
+  'art/titan.png',
+  'art/viper.png',
   'src/util.js',
   'src/audio.js',
   'src/music.js',
