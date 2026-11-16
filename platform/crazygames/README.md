@@ -27,9 +27,15 @@ The build stops if any patch doesn't match exactly, and it lists any outgoing UR
 
 Serve `dist/crazygames/` on `localhost`, for example with `python -m http.server 5262` from that folder. On `localhost` the SDK runs in `local` mode: ads show a placeholder and the console logs every SDK call. Add `?muteAudio=true` to test the platform mute.
 
+## Covers
+
+`store/` holds the three covers CrazyGames asks for: 1920×1080, 800×1200 and 800×800. Each has a large gunship from painted key art, with the title in the game's Orbitron lettering, kept clear of the top-left corner where CrazyGames puts its labels. The capybara game's busy gameplay cover lost clicks, so these lead with the aircraft.
+
+- **Key art:** `covers/art/`, painted with Pixa (Flux 2 Max, 2K) with no text.
+- **Rebuild:** run `python platform/crazygames/covers/mkcovers.py`, which crops each picture, darkens the corner behind the title and draws the title. It needs Pillow, and fontTools with brotli to read the game's woff2 font.
+
 ## Still to do before submitting
 
-- **Covers:** 1920×1080, 800×1200 and 800×800, character-led, with the aircraft large. The capybara game found a busy gameplay cover lost clicks.
 - **Preview videos:** landscape and portrait.
 - **Store text:** check `store/STORE-TEXT.md`.
 - **Optional:** a rewarded ad, for example to continue after being shot down or for double contract pay.

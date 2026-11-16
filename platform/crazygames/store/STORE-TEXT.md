@@ -1,6 +1,6 @@
 # CrazyGames store listing: Talon Strike
 
-Draft text for the CrazyGames Developer Portal. Each section matches a submission field. The covers and preview videos still need making (see the README one folder up).
+Draft text for the CrazyGames Developer Portal. Each section matches a submission field. The three covers are in this folder; the preview videos still need making (see the README one folder up).
 
 ## Title
 
