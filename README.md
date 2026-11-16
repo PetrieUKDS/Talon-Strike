@@ -148,6 +148,22 @@ Skywatch's radio calls use the callsign of the aircraft you're flying.
 
 Each aircraft is an entry in the `VEHICLES` list in `src/entities.js`. An entry sets how the aircraft looks (its draw function and colours) and how it handles: armour, missiles, flares, cruise and turbo speed, turn rate, hitbox size, gun position, fire rate, damage and heat, and where missiles launch from. Add an entry and it appears in the hangar automatically.
 
+## Play stats
+
+On petrieuk.co.uk the game sends anonymous events to the site's GoatCounter (`gc()` in `src/game.js`). They carry no ids or personal details, only what happened. The site's build adds the GoatCounter tag and its privacy page covers it. GitHub Pages and local copies have no tag, so they send nothing.
+
+| Event (`talon/...`) | When |
+| --- | --- |
+| `quick-start/<input>` | A first-time player presses PLAY |
+| `played/<1, 5, 10 or 30>-min/<new or returning>/<input>` | Flying time this visit passes that mark. The 1-minute count is the conversion figure CrazyGames judges. |
+| `training/done`, `training/skipped-at-<step>` | The training ends |
+| `mission-start/<n>/<aircraft>` | A mission launches, retries included |
+| `mission/<n>/won/<stars>-star/<minutes>` | A mission is won |
+| `mission/<n>/lost/<down or objective>/<minutes>` | A mission is lost: shot down, or the objective failed |
+| `contract-start/<kind>/<objectives>`, `contract/<kind>/rank-<r>/won/...` and `.../lost/...` | The same for contracts |
+
+`<input>` is touch, pad or keyboard, and `<minutes>` is a bucket: 0-1, 1-3, 3-6, 6-10 or 10-plus.
+
 ## Sprites
 
 The four player aircraft are painted images in `art/`, generated with Pixa (Qwen Image 2.1) and cut out of their backgrounds. Their rotors, lift fans and engine glows are still drawn in code, so they spin and flare. `ART` in `src/entities.js` sets where each image sits on its aircraft's footprint and where its rotor hubs are.

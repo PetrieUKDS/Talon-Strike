@@ -38,6 +38,27 @@ const TUTORIAL = [
 const flareTip = () => (Input.touchMode ? 'MISSILE LOCK - TAP FLR FOR FLARES'
   : Input.pad ? 'MISSILE LOCK - RIGHT BUMPER FOR FLARES' : `MISSILE LOCK - ${Input.bindLabel('flare')} FOR FLARES`);
 
+// Anonymous play events for GoatCounter, sent as talon/<what>. They only count when the page
+// carries the GoatCounter tag, which petrieuk.co.uk's build adds (its privacy page covers it);
+// GitHub Pages and local copies send nothing. No ids, no personal details: just what happened.
+function gc(what) {
+  try {
+    if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: 'talon/' + what, title: what, event: true });
+  } catch (e) { /* counting is optional */ }
+}
+
+// The controls in use, for splitting events by device.
+const inputKind = () => (Input.touchMode ? 'touch' : Input.pad ? 'pad' : 'keyboard');
+
+// Minutes as a coarse bucket, so events group well.
+const minBucket = (sec) => {
+  const m = sec / 60;
+  return m < 1 ? '0-1' : m < 3 ? '1-3' : m < 6 ? '3-6' : m < 10 ? '6-10' : '10-plus';
+};
+
+// Total flying time this visit at which to send a played/<n>-min event (CrazyGames judges the first minute).
+const PLAY_MARKS = [1, 5, 10, 30];
+
 function starString(n, of = 3) {
   return '★'.repeat(n) + '☆'.repeat(of - n);
 }
@@ -96,6 +117,9 @@ const G = {
     loadArt();
     Save.load();
     Settings.load();
+    this.newPlayer = this.firstVisit();
+    this.playT = 0;
+    this.playMark = 0;
     setTheatre(MISSIONS[0].theatre);
     this.terrain = new Terrain();
     this.base = this.findBase();
@@ -229,6 +253,7 @@ const G = {
   // A first visit skips the hangar, mission select and briefing: straight into the first
   // mission in the Stormwolf, with a few jeeps close by so there's shooting within seconds.
   quickStart() {
+    gc('quick-start/' + inputKind());
     Save.data.started = true;
     Save.write();
     this.vehicle = VEHICLES.stormwolf;
@@ -245,6 +270,7 @@ const G = {
   },
 
   startMission(i) {
+    gc(`mission-start/${(i % MISSIONS.length) + 1}/${this.pickId()}`);
     Save.data.started = true;
     this.missionIndex = i;
     this.contract = null;
@@ -254,6 +280,7 @@ const G = {
 
   // A contract from the board or the daily one (see contracts.js). Its rank sets enemy strength.
   startContract(m) {
+    gc(`contract-start/${m.contract.kind}/${m.contract.labels.join('+').toLowerCase().replace(/ /g, '-')}`);
     this.contract = m;
     this.launch(m, 0.95 + 0.09 * m.contract.rank, false);
   },
@@ -300,6 +327,12 @@ const G = {
     this.setState('briefing');
   },
 
+  // mission/<n> or contract/<kind>/rank-<r>, the start of an outcome event's path.
+  outcomeTag() {
+    const c = this.contract && this.contract.contract;
+    return c ? `contract/${c.kind}/rank-${c.rank}` : `mission/${(this.missionIndex % MISSIONS.length) + 1}`;
+  },
+
   setState(s) {
     this.state = s;
     this.stateT = 0;
@@ -308,6 +341,7 @@ const G = {
   },
 
   playerDied() {
+    gc(`${this.outcomeTag()}/lost/down/${minBucket(this.missionTime)}`);
     this.explode(this.player.x, this.player.y, 60);
     this.result = 'down';
     this.setState('dying');
@@ -480,6 +514,7 @@ const G = {
   },
 
   endTutorial(msg) {
+    gc(this.tut && this.tut.step < TUTORIAL.length ? `training/skipped-at-${this.tut.step + 1}` : 'training/done');
     this.tut = null;
     this.tutSkip = null;
     Settings.data.tutorial = false;
@@ -702,6 +737,11 @@ const G = {
         }
         this.updateWorld(dt);
         this.checkMission();
+        this.playT += dt;
+        if (this.playMark < PLAY_MARKS.length && this.playT >= PLAY_MARKS[this.playMark] * 60) {
+          gc(`played/${PLAY_MARKS[this.playMark]}-min/${this.newPlayer ? 'new' : 'returning'}/${inputKind()}`);
+          this.playMark++;
+        }
         break;
       case 'dying':
         this.updateWorld(dt);
@@ -1407,9 +1447,11 @@ const G = {
       if (c) Save.contractCleared(c, this.lastEarned, this.score - this.missionStartScore);
       else Save.cleared(this.missionIndex, this.lastEarned, this.lastStars);
       this.banner(c ? 'CONTRACT COMPLETE' : 'MISSION COMPLETE', HUD_AMBER);
+      gc(`${this.outcomeTag()}/won/${this.lastStars}-star/${minBucket(this.missionTime)}`);
       this.setState('complete');
     } else if (s === 'lost') {
       this.result = 'lost';
+      gc(`${this.outcomeTag()}/lost/objective/${minBucket(this.missionTime)}`);
       this.setState('failed');
     }
   },
