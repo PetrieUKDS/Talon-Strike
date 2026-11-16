@@ -148,6 +148,10 @@ Skywatch's radio calls use the callsign of the aircraft you're flying.
 
 Each aircraft is an entry in the `VEHICLES` list in `src/entities.js`. An entry sets how the aircraft looks (its draw function and colours) and how it handles: armour, missiles, flares, cruise and turbo speed, turn rate, hitbox size, gun position, fire rate, damage and heat, and where missiles launch from. Add an entry and it appears in the hangar automatically.
 
+## CrazyGames build
+
+`node platform/crazygames/build.mjs` builds a CrazyGames version into `dist/` without changing the game. It adds their SDK, saves to the player's account, ads between missions, and removes outgoing links and offline install. See `platform/crazygames/README.md`.
+
 ## Play stats
 
 On petrieuk.co.uk the game sends anonymous events to the site's GoatCounter (`gc()` in `src/game.js`). They carry no ids or personal details, only what happened. The site's build adds the GoatCounter tag and its privacy page covers it. GitHub Pages and local copies have no tag, so they send nothing.
