@@ -34,9 +34,22 @@ Serve `dist/crazygames/` on `localhost`, for example with `python -m http.server
 - **Key art:** `covers/art/`, painted with Pixa (Flux 2 Max, 2K) with no text.
 - **Rebuild:** run `python platform/crazygames/covers/mkcovers.py`, which crops each picture, darkens the corner behind the title and draws the title. It needs Pillow, and fontTools with brotli to read the game's woff2 font.
 
+## Preview videos
+
+`store/preview-landscape-1920x1080.mp4` and `store/preview-portrait-1080x1620.mp4` are 18-second clips of the real game, with no sound and no HUD. The only text is the title, which fades in the first second. They show three scenes: a desert SAM site, the tundra fuel depots, and RED TALON in the canyons. They're gitignored because of their size, so keep a copy if you move machines. To re-record them:
+
+1. Serve the repo root on `127.0.0.1:5220` (`python -m http.server 5220 --bind 127.0.0.1`).
+2. Run `node platform/crazygames/video/receive.mjs` to save the frames.
+3. Open `/platform/crazygames/video/video.html` and keep the browser in view, because a hidden tab is throttled. Run `await VIDEO.record('landscape')`, reload, then `await VIDEO.record('portrait')`.
+4. Run `node platform/crazygames/video/encode.mjs`, which needs ffmpeg.
+
+`video.js` takes over a copy of the game on that page:
+- It renders at the exact video size in fixed steps.
+- It flies an autopilot and keeps the player alive.
+- It builds the terrain in view ahead of each frame. The scenes are in `SCENES`.
+
 ## Still to do before submitting
 
-- **Preview videos:** landscape and portrait.
 - **Store text:** check `store/STORE-TEXT.md`.
 - **Optional:** a rewarded ad, for example to continue after being shot down or for double contract pay.
 - **Before submitting:** Pixa's written confirmation of commercial use for the art.

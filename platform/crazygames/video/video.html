@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Preview-video recorder: the real game, loaded from the repo root, plus video.js. -->
+  <base href="../../../">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Talon Strike</title>
+  <meta name="theme-color" content="#05070a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Talon Strike">
+    <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preload" href="fonts/orbitron.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/share-tech-mono.woff2" as="font" type="font/woff2" crossorigin>
+  <style>
+    /* fonts are served with the game (SIL OFL, see fonts/) so players' browsers never contact a third party */
+    @font-face { font-family: 'Orbitron'; font-weight: 700 900; font-display: swap; src: url(fonts/orbitron.woff2) format('woff2'); }
+    @font-face { font-family: 'Share Tech Mono'; font-weight: 400; font-display: swap; src: url(fonts/share-tech-mono.woff2) format('woff2'); }
+    :root { color-scheme: dark; background: #05070a; }
+    html, body { height: 100%; margin: 0; background: #05070a; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+    canvas { display: block; width: 100vw; height: 100vh; cursor: default; }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <script src="src/util.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/music.js"></script>
+  <script src="src/input.js"></script>
+  <script src="src/terrain.js"></script>
+  <script src="src/entities.js"></script>
+  <script src="src/missions.js"></script>
+  <script src="src/contracts.js"></script>
+  <script src="src/progress.js"></script>
+  <script src="src/weather.js"></script>
+  <script src="src/hud.js"></script>
+  <script src="src/game.js"></script>
+  <script src="platform/crazygames/video/video.js"></script>
+</body>
+</html>
