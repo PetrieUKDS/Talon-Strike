@@ -111,7 +111,7 @@ Settings has a **SEND FEEDBACK** button that opens a Tally form in a new tab. It
 
 ### Training
 
-The first time you fly Operation Sandstorm, a five-step guide walks you through flying, firing, missiles, flares and landing on the pad to repair. The hints match whatever you're playing with: touch, gamepad or keyboard. Enemies don't send reinforcements and the par clock doesn't run until training is over. Press Tab, or tap **TAP TO SKIP**, to skip it.
+The first time you play, the title screen shows a single PLAY button that goes straight into Operation Sandstorm in the Stormwolf, with no aircraft pick, mission list or briefing, and a few jeeps close by to shoot at. A three-step guide walks you through flying, firing and missiles while you play. Flares are explained at your first missile lock, and the repair pad the first time your armour drops below half. The hints match whatever you're playing with: touch, gamepad or keyboard. Enemies don't send reinforcements and the par clock doesn't run until training is over. Press Tab, or tap **TAP TO SKIP**, to skip it.
 
 ### Warnings
 

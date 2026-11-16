@@ -32,17 +32,11 @@ const TUTORIAL = [
       : `${Input.bindLabel('missile')} or RIGHT CLICK launches a homing missile at the target in the lock box`),
     done: (g, t) => t.missile,
   },
-  {
-    hint: (g) => (Input.touchMode ? 'Tap FLR to drop flares - they break enemy missile locks'
-      : Input.pad ? 'RIGHT BUMPER drops flares - they break enemy missile locks'
-      : `${Input.bindLabel('flare')} drops flares - they break enemy missile locks`),
-    done: (g, t) => t.flare,
-  },
-  {
-    hint: () => 'Fly back and hover over the base pad to repair and rearm',
-    done: (g, t) => t.padT > 1.2,
-  },
 ];
+
+// One-off tips, each shown the first time it matters (see firstTips()).
+const flareTip = () => (Input.touchMode ? 'MISSILE LOCK - TAP FLR FOR FLARES'
+  : Input.pad ? 'MISSILE LOCK - RIGHT BUMPER FOR FLARES' : `MISSILE LOCK - ${Input.bindLabel('flare')} FOR FLARES`);
 
 function starString(n, of = 3) {
   return '★'.repeat(n) + '☆'.repeat(of - n);
@@ -126,7 +120,9 @@ const G = {
     this.h = window.innerHeight;
     this.canvas.width = Math.round(this.w * this.dpr);
     this.canvas.height = Math.round(this.h * this.dpr);
-    this.zoom = clamp(Math.min(this.w, this.h) / 820, 0.55, 1.3);
+    // Touch screens get a closer minimum, so the action isn't tiny on a phone.
+    const minZoom = matchMedia('(pointer: coarse)').matches ? 0.7 : 0.55;
+    this.zoom = clamp(Math.min(this.w, this.h) / 820, minZoom, 1.3);
     this.safe = readSafeArea();
     Input.layoutButtons(this.w, this.h, this.safe);
   },
@@ -223,7 +219,33 @@ const G = {
 
   // ------------------------------------------------------------ flow
 
+  // Nobody has launched a mission from this browser yet. Saves from before the flag existed
+  // count as returning players if they hold any progress.
+  firstVisit() {
+    const d = Save.data;
+    return !d.started && d.unlocked <= 1 && !d.funds && !Object.keys(d.best).length;
+  },
+
+  // A first visit skips the hangar, mission select and briefing: straight into the first
+  // mission in the Stormwolf, with a few jeeps close by so there's shooting within seconds.
+  quickStart() {
+    Save.data.started = true;
+    Save.write();
+    this.vehicle = VEHICLES.stormwolf;
+    this.score = 0;
+    this.startMission(0);
+    for (let i = 0; i < 3; i++) {
+      const pt = this.landPoint(this.base, 480, 640);
+      const e = this.make('jeep', pt.x, pt.y);
+      e.aware = true;
+      this.enemies.push(e);
+    }
+    this.setState('play');
+    this.banner('DESTROY THE 3 SAM SITES', HUD_AMBER);
+  },
+
   startMission(i) {
+    Save.data.started = true;
     this.missionIndex = i;
     this.contract = null;
     const tour = Math.floor(i / MISSIONS.length);
@@ -266,7 +288,7 @@ const G = {
     this.hurtFlash = 0;
     this.damageTaken = 0;
     this.missionTime = 0;
-    this.tut = tutorial ? { step: 0, fired: 0, missile: false, flare: false, padT: 0, flash: 0 } : null;
+    this.tut = tutorial ? { step: 0, fired: 0, missile: false, flash: 0 } : null;
     this.terrain.reset();
     this.player = new Player(this.base.x, this.base.y, this.vehicle, Save.mods());
     this.aimMode = 'keys';
@@ -431,8 +453,6 @@ const G = {
     const p = this.player;
     if (c.fire) t.fired += dt;
     if (c.missile) t.missile = true;
-    if (c.flare) t.flare = true;
-    t.padT = p.onPad && t.step === TUTORIAL.length - 1 ? t.padT + dt : 0;
     t.flash = Math.max(0, t.flash - dt);
     if (TUTORIAL[t.step].done(this, t)) {
       t.step++;
@@ -441,6 +461,22 @@ const G = {
       if (t.step >= TUTORIAL.length) this.endTutorial('TRAINING COMPLETE - DESTROY THE SAM SITES');
     }
     if (Input.hit('Tab') || (this.tutSkip && Input.tapped && this.inBox(this.tutSkip))) this.endTutorial('TRAINING SKIPPED');
+  },
+
+  // Explain flares at the first missile lock and the repair pad at the first heavy damage,
+  // once ever, instead of making new players practise them before they've seen why.
+  firstTips() {
+    const s = Settings.data, p = this.player;
+    if (!s.tipFlares && this.missileWarning && p.flares > 0) {
+      s.tipFlares = true;
+      Settings.write();
+      this.banner(flareTip(), HUD_RED);
+    }
+    if (!s.tipPad && !p.dead && p.hp < p.maxHp * 0.5) {
+      s.tipPad = true;
+      Settings.write();
+      this.banner('HOVER OVER YOUR BASE PAD TO REPAIR', HUD_AMBER);
+    }
   },
 
   endTutorial(msg) {
@@ -622,7 +658,8 @@ const G = {
         }
         if (this.stateT > 0.3 && Input.confirm()) {
           Sfx.confirm();
-          this.setState('hangar');
+          if (this.firstVisit()) this.quickStart();
+          else this.setState('hangar');
         }
         break;
       case 'hangar':
@@ -1458,6 +1495,7 @@ const G = {
     }
     const nearest = this.threats.reduce((n, t) => Math.min(n, t.d), Infinity);
     this.missileWarning = nearest < 1000;
+    if (this.state === 'play') this.firstTips();
     this.warnBeepT -= dt;
     if (this.missileWarning && this.warnBeepT <= 0) {
       const near = 1 - nearest / 1000;
@@ -1792,6 +1830,7 @@ const G = {
     Hud.text(ctx, 'STRIKE', w / 2, h * 0.3 + ts * 1.05, { size: ts, align: 'center', font: TITLE_FONT, weight: '900', color: HUD_AMBER });
     Hud.text(ctx, 'A SKYWATCH CAMPAIGN', w / 2, h * 0.3 + ts * 1.05 + 34, { size: small ? 13 : 16, align: 'center', color: '#9fb4c0' });
 
+    if (this.firstVisit()) return this.drawFirstTitle(ctx, ts);
     const lines = Input.touchMode || 'ontouchstart' in window && w < 900
       ? ['LEFT THUMB  move', 'RIGHT THUMB  aim + fire', 'MSL missiles   FLR flares   TRB turbo', 'Hover over the base pad to repair & rearm']
       : [
@@ -1811,6 +1850,23 @@ const G = {
       Hud.text(ctx, 'PRESS SPACE / CLICK / TAP TO START', w / 2, h * 0.9, { size: small ? 14 : 18, align: 'center', color: HUD_GREEN });
     }
     if (this.best) Hud.text(ctx, `BEST ${this.best}`, w / 2, h * 0.9 + 28, { size: 13, align: 'center', color: '#9fb4c0' });
+  },
+
+  drawFirstTitle(ctx, ts) {
+    const w = this.w, h = this.h, small = w < 600;
+    const bw = Math.min(300, w * 0.6), bh = small ? 58 : 70;
+    const bx = (w - bw) / 2, by = Math.min(h * 0.62, h - bh - 70);
+    const pulse = 0.75 + 0.25 * Math.sin(this.time * 4);
+    ctx.fillStyle = `rgba(125,255,176,${0.16 * pulse})`;
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = HUD_GREEN;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(bx, by, bw, bh);
+    Hud.text(ctx, 'PLAY', w / 2, by + bh / 2 + (small ? 9 : 12), { size: small ? 26 : 34, align: 'center', font: TITLE_FONT, weight: '900', color: HUD_GREEN });
+    const touch = Input.touchMode || ('ontouchstart' in window && w < 900);
+    const hint = touch ? 'Left thumb flies   right thumb aims - guns fire by themselves'
+      : 'WASD fly   mouse aims   click or SPACE fires';
+    Hud.text(ctx, hint, w / 2, by + bh + 30, { size: small ? 12 : 14, align: 'center', color: '#c8d6dc' });
   },
 
   drawHangar(ctx) {
