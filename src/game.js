@@ -1443,18 +1443,30 @@ const G = {
     const pw = Math.min(600, w - 24);
     const x0 = (w - pw) / 2;
     const hits = [];
-    let y = Math.max(44, h * 0.1);
-    Hud.text(ctx, 'WORKSHOP', w / 2, y, { size: small ? 22 : 30, align: 'center', font: TITLE_FONT, weight: '900', color: HUD_AMBER });
-    y += small ? 26 : 32;
-    Hud.text(ctx, `FUNDS ${Save.data.funds}`, w / 2, y, { size: 18, align: 'center', color: HUD_GREEN });
-    y += 22;
-    Hud.text(ctx, 'Upgrades fit every aircraft in the hangar.', w / 2, y, { size: 12, align: 'center', color: '#9fb4c0' });
-    y += 22;
-    if (Save.contractsOpen() && Save.maxLevel() < 5) {
-      Hud.text(ctx, `Level ${Save.maxLevel() + 1} goes on sale at contract rank ${UPGRADE_RANKS[Save.maxLevel() - 3]}.`, w / 2, y - 4, { size: 12, align: 'center', color: '#5ec8ff' });
-      y += 18;
+    // Short (landscape phone) screens get a one-line header and no notes, so the rows and the
+    // continue button fit; the rows then share whatever height is left.
+    const short = h < 520;
+    const safeB = (this.safe && this.safe.b) || 0;
+    let y = short ? 24 : Math.max(44, h * 0.1);
+    if (short) {
+      Hud.text(ctx, 'WORKSHOP', x0 + 4, y, { size: 18, font: TITLE_FONT, weight: '900', color: HUD_AMBER });
+      Hud.text(ctx, `FUNDS ${Save.data.funds}`, x0 + pw - 4, y, { size: 16, align: 'right', color: HUD_GREEN });
+      y += 14;
+    } else {
+      Hud.text(ctx, 'WORKSHOP', w / 2, y, { size: small ? 22 : 30, align: 'center', font: TITLE_FONT, weight: '900', color: HUD_AMBER });
+      y += small ? 26 : 32;
+      Hud.text(ctx, `FUNDS ${Save.data.funds}`, w / 2, y, { size: 18, align: 'center', color: HUD_GREEN });
+      y += 22;
+      Hud.text(ctx, 'Upgrades fit every aircraft in the hangar.', w / 2, y, { size: 12, align: 'center', color: '#9fb4c0' });
+      y += 22;
+      if (Save.contractsOpen() && Save.maxLevel() < 5) {
+        Hud.text(ctx, `Level ${Save.maxLevel() + 1} goes on sale at contract rank ${UPGRADE_RANKS[Save.maxLevel() - 3]}.`, w / 2, y - 4, { size: 12, align: 'center', color: '#5ec8ff' });
+        y += 18;
+      }
     }
-    const rowH = small ? 46 : 54;
+    const bottom = h - safeB - 34 - (short ? 8 : 40); // room for the button (and the key hint)
+    const rowH = clamp((bottom - y - 8) / UPGRADES.length, 32, small ? 46 : 54);
+    const twoLine = rowH >= 42; // room for the per-level note under each name
     UPGRADES.forEach((u, i) => {
       const ry = y + i * rowH;
       const sel = this.shop.sel === i;
@@ -1469,8 +1481,8 @@ const G = {
         ctx.strokeRect(x0 + 0.5, ry + 0.5, pw - 1, rowH - 7);
       }
       const mid = ry + (rowH - 6) / 2;
-      Hud.text(ctx, u.name, x0 + 14, mid - 3, { size: small ? 13 : 15, color: sel ? '#ffffff' : '#c8d6dc' });
-      Hud.text(ctx, `${u.desc} per level`, x0 + 14, mid + 13, { size: 11, color: '#9fb4c0' });
+      Hud.text(ctx, u.name, x0 + 14, mid + (twoLine ? -3 : 5), { size: small ? 13 : 15, color: sel ? '#ffffff' : '#c8d6dc' });
+      if (twoLine) Hud.text(ctx, `${u.desc} per level`, x0 + 14, mid + 13, { size: 11, color: '#9fb4c0' });
       // Levels past the ones on sale are drawn as empty outlines.
       for (let k = 0; k < u.costs.length; k++) {
         const px = x0 + pw * 0.5 + k * 16;
@@ -1489,7 +1501,7 @@ const G = {
       Hud.text(ctx, label, x0 + pw - 14, mid + 5, { size: 14, align: 'right', color: labelCol });
       hits.push({ kind: 'upgrade', i, x: x0, y: ry, w: pw, h: rowH - 6 });
     });
-    const by = y + UPGRADES.length * rowH + 8;
+    const by = Math.min(y + UPGRADES.length * rowH + 8, h - safeB - 34 - 6);
     const cs = this.shop.sel === UPGRADES.length;
     ctx.strokeStyle = cs ? HUD_AMBER : HUD_GREEN;
     ctx.lineWidth = cs ? 2 : 1.5;
@@ -1497,8 +1509,8 @@ const G = {
     const nextLabel = this.shop.next === 'missions' || this.shop.next === 'contracts' ? 'DONE' : 'CONTINUE TO BRIEFING';
     Hud.text(ctx, nextLabel, w / 2, by + 22, { size: 14, align: 'center', color: cs ? HUD_AMBER : HUD_GREEN });
     hits.push({ kind: 'continue', x: x0 + pw / 2 - 110, y: by, w: 220, h: 34 });
-    if (!Input.touchMode) {
-      Hud.text(ctx, '↑↓ SELECT   SPACE BUY   ESC CONTINUE', w / 2, Math.min(h - 14, by + 60), { size: 12, align: 'center', color: '#9fb4c0' });
+    if (!Input.touchMode && by + 60 < h) {
+      Hud.text(ctx, '↑↓ SELECT   SPACE BUY   ESC CONTINUE', w / 2, by + 60, { size: 12, align: 'center', color: '#9fb4c0' });
     }
     this.menuHits = hits;
   },
