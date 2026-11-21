@@ -36,6 +36,8 @@
   function hook() {
     call((s) => s.game.loadingStop());
     let sdkMute = false, adBusy = false, playing = false, was = G.state;
+    rewardedHook = { silence: (on) => silence(on), skipMidgame: () => { skipMidgame = true; } };
+    let skipMidgame = false; // a continue goes straight back into the fight, with no midgame ad on top
     const applySettings = (st) => { sdkMute = !!(st && st.muteAudio); };
     call((s) => { applySettings(s.game.settings); s.game.addSettingsChangeListener(applySettings); });
 
@@ -64,7 +66,8 @@
       if (sdkMute && !Sfx.muted) Sfx.toggleMute();
       const now = G.state;
       if (now !== was) {
-        if (was === 'complete' || was === 'failed') midgame();
+        if ((was === 'complete' || was === 'failed') && !skipMidgame) midgame();
+        if (was === 'failed') skipMidgame = false;
         if (now === 'complete') call((s) => s.game.happytime());
         was = now;
       }
@@ -76,6 +79,28 @@
       }
     }, 150);
   }
+
+  // The game's "KEEP FIGHTING" continue after being shot down asks for this (see G.revive). It plays a
+  // CrazyGames rewarded ad with the game's sound suspended and continues on adFinished. If no ad can be
+  // shown (adError, e.g. nothing to fill the slot) the player still gets the continue: they asked for it,
+  // and it isn't their fault there was nothing to watch.
+  let rewardedHook = null;
+  window.__talonReviveAd = (done) => {
+    if (!sdk || !rewardedHook) { done(true); return; }
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      rewardedHook.silence(false);
+      rewardedHook.skipMidgame();
+      done(true);
+    };
+    call((s) => s.ad.requestAd('rewarded', {
+      adStarted: () => rewardedHook.silence(true),
+      adFinished: finish,
+      adError: (e) => { log('rewarded ad not shown', e && e.code); finish(); },
+    }));
+  };
 
   // The build swaps the game's own `window.addEventListener('load', () => G.init())` for a call to this,
   // so the SDK (and the saves it holds) is ready before the game reads its save.

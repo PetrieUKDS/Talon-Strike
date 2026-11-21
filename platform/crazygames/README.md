@@ -15,6 +15,7 @@ The output goes to `dist/crazygames/` (the files to play) and `dist/talon-strike
 - **Gameplay events:** `loadingStart` and `loadingStop` around startup; `gameplayStart` while flying a mission; `gameplayStop` on pause, menus, briefings and the results screens.
 - **`happytime`** when a mission or contract is cleared.
 - **Midgame ad** when the player leaves the mission-complete or failure screen. The game's sound is suspended while it plays. Every screen they go to from there waits for input, so the game doesn't need pausing.
+- **Rewarded ad:** after being shot down, the failure screen offers KEEP FIGHTING (the C key or its button), once per mission. The game asks the adapter's `window.__talonReviveAd`, which plays a CrazyGames rewarded ad with the sound suspended. The player then carries on with full armour, missiles and flares and a 3-second shield. If no ad can be shown, the player still gets the continue. No midgame ad follows it. The normal game has no `__talonReviveAd`, so the option never appears on petrieuk.co.uk.
 - **CrazyGames mute setting** always wins over the in-game M key.
 - **Removed:**
   - the SEND FEEDBACK button, an outgoing link to the Tally form
@@ -51,5 +52,4 @@ Serve `dist/crazygames/` on `localhost`, for example with `python -m http.server
 ## Still to do before submitting
 
 - **Store text:** check `store/STORE-TEXT.md`.
-- **Optional:** a rewarded ad, for example to continue after being shot down or for double contract pay.
 - **Before submitting:** Pixa's written confirmation of commercial use for the art.

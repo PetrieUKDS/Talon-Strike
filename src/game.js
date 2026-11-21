@@ -315,6 +315,7 @@ const G = {
     this.hurtFlash = 0;
     this.damageTaken = 0;
     this.missionTime = 0;
+    this.revived = false; this.reviving = false;
     this.tut = tutorial ? { step: 0, fired: 0, missile: false, flash: 0 } : null;
     this.terrain.reset();
     this.player = new Player(this.base.x, this.base.y, this.vehicle, Save.mods());
@@ -325,6 +326,38 @@ const G = {
     this.cam.x = this.player.x;
     this.cam.y = this.player.y;
     this.setState('briefing');
+  },
+
+  // A second chance after being shot down, once a mission, only where a platform supplies one:
+  // window.__talonReviveAd(done) plays a rewarded ad and calls done(true) to continue. The normal
+  // game never defines it (the CrazyGames build's adapter does), so there the option never shows.
+  canRevive() {
+    return typeof window.__talonReviveAd === 'function' && this.result === 'down' && !this.revived;
+  },
+
+  revive() {
+    this.reviving = true;
+    gc('revive/asked');
+    window.__talonReviveAd((ok) => {
+      this.reviving = false;
+      if (!ok || this.state !== 'failed') return;
+      this.revived = true;
+      const p = this.player;
+      p.dead = false;
+      p.hp = p.maxHp;
+      p.missiles = p.maxMissiles;
+      p.flares = p.maxFlares;
+      p.heat = 0;
+      p.overheat = false;
+      p.shieldT = 3; // a moment's cover while getting back into it
+      p.vx = 0; p.vy = 0;
+      this.ebullets = [];
+      this.missiles = this.missiles.filter((m) => m.owner !== 'e');
+      this.result = null;
+      this.setState('play');
+      this.banner('BACK IN THE FIGHT', HUD_GREEN);
+      gc('revive/used');
+    });
   },
 
   // mission/<n> or contract/<kind>/rank-<r>, the start of an outcome event's path.
@@ -751,7 +784,11 @@ const G = {
       case 'failed':
         this.updateWorld(dt);
         if (this.stateT < 1.2) break;
-        if (this.state === 'failed' && (Input.hit('Escape') || (this.tapHit() || {}).kind === 'back')) {
+        if (this.state === 'failed' && this.reviving) break;
+        if (this.state === 'failed' && this.canRevive() && (Input.hit('KeyC') || (this.tapHit() || {}).kind === 'revive')) {
+          Sfx.confirm();
+          this.revive();
+        } else if (this.state === 'failed' && (Input.hit('Escape') || (this.tapHit() || {}).kind === 'back')) {
           Sfx.beep();
           this.score = this.missionStartScore;
           if (this.contract) this.openContracts();
@@ -2188,18 +2225,32 @@ const G = {
   drawFailed(ctx) {
     const title = this.result === 'down' ? `${this.vehicle.name} DOWN` : 'MISSION FAILED';
     const why = this.result === 'down' ? 'Your armor gave out.' : this.mission.failText || 'The objective was lost.';
+    const revive = this.canRevive();
     const lines = [why, '', 'PRESS SPACE / TAP TO RETRY'];
     if (!Input.touchMode) lines.push(`ESC FOR ${this.contract ? 'THE CONTRACT BOARD' : 'MISSION SELECT'}`);
     const bottom = this.drawCenterPanel(ctx, title, lines, HUD_RED);
-    // A button back to the menu, for touch screens with no Esc key.
+    // A button back to the menu, for touch screens with no Esc key, and the continue where offered.
     this.menuHits = null;
     if (this.stateT < 1.2) return;
-    const bw = 220, bx = this.w / 2 - bw / 2, by = Math.min(this.h - 44, bottom + 8);
-    ctx.strokeStyle = '#c8d6dc';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(bx, by, bw, 34);
-    Hud.text(ctx, this.contract ? 'CONTRACT BOARD' : 'MISSION SELECT', this.w / 2, by + 22, { size: 14, align: 'center', color: '#c8d6dc' });
-    this.menuHits = [{ kind: 'back', x: bx, y: by, w: bw, h: 34 }];
+    const hits = [];
+    const button = (label, kind, y, color, w = 240) => {
+      const x = this.w / 2 - w / 2;
+      ctx.fillStyle = kind === 'revive' ? 'rgba(125,255,176,0.12)' : 'rgba(0,0,0,0)';
+      ctx.fillRect(x, y, w, 36);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = kind === 'revive' ? 2 : 1.5;
+      ctx.strokeRect(x, y, w, 36);
+      Hud.text(ctx, label, this.w / 2, y + 23, { size: 14, align: 'center', color });
+      hits.push({ kind, x, y, w, h: 36 });
+    };
+    let by = Math.min(this.h - (revive ? 90 : 44), bottom + 8);
+    if (revive) {
+      const label = this.reviving ? 'LOADING AD...' : `${Input.touchMode ? '' : 'C  '}KEEP FIGHTING - WATCH AD`;
+      button(label, 'revive', by, HUD_GREEN, 300);
+      by += 46;
+    }
+    button(this.contract ? 'CONTRACT BOARD' : 'MISSION SELECT', 'back', by, '#c8d6dc');
+    this.menuHits = hits;
   },
 };
 

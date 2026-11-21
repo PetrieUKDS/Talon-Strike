@@ -59,5 +59,5 @@ Land on your base pad to repair and rearm. Keys can be changed in the game (C on
 ## Notes for the submission form
 
 - Turn on **Progress Save**: the build stores its save through the SDK data module.
-- The build reports loading, gameplay start and stop, happy time when a mission is cleared, and a midgame ad between missions. There are no rewarded ads yet.
+- The build reports loading, gameplay start and stop, and happy time when a mission is cleared. It shows a midgame ad between missions, and a rewarded ad for KEEP FIGHTING: a continue once per mission after being shot down.
 - The art was made with Pixa, and the music is original and generated in the browser.
