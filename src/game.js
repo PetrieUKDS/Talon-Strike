@@ -435,28 +435,39 @@ const G = {
     if (dist(x, y, this.player.x, this.player.y) < 1200) Sfx.enemyMissile();
   },
 
-  findTarget(x, y, angle, range) {
+  // The best enemy within range and within maxOff radians of angle, favouring close and straight ahead.
+  findTarget(x, y, angle, range, maxOff = 0.9, offWeight = 2) {
     let best = null, bs = Infinity;
     for (const e of this.enemies) {
       if (e.dead) continue;
       const d = dist(x, y, e.x, e.y);
       if (d > range) continue;
       const off = Math.abs(angDiff(angle, Math.atan2(e.y - y, e.x - x)));
-      if (off > 0.9) continue;
-      const s = d * (1 + off * 2);
+      if (off > maxOff) continue;
+      const s = d * (1 + off * offWeight);
       if (s < bs) { bs = s; best = e; }
     }
     return best;
   },
 
+  // The missile lock. Aiming right at an enemy always locks it. Otherwise, with the mouse, the lock
+  // comes from a cone ahead of the nose. With touch, a controller or the turn keys, where aiming is
+  // rough, it keeps the current lock while it stays in range, then takes the best enemy in any direction,
+  // still favouring the ones ahead. Homing missiles turn to reach a target behind.
   computeLock(c) {
+    const p = this.player;
     let best = null, bd = 240 * 240;
     for (const e of this.enemies) {
       if (e.dead) continue;
       const d = dist2(e.x, e.y, c.aimX, c.aimY);
       if (d < bd) { bd = d; best = e; }
     }
-    return best || this.findTarget(this.player.x, this.player.y, this.player.angle, 750);
+    if (best) return best;
+    const rough = Input.touchMode || !!Input.pad || this.aimMode === 'keys';
+    if (!rough) return this.findTarget(p.x, p.y, p.angle, 750);
+    const cur = this.lockTarget;
+    if (cur && !cur.dead && this.enemies.includes(cur) && dist(cur.x, cur.y, p.x, p.y) < 820) return cur;
+    return this.findTarget(p.x, p.y, p.angle, 700, Math.PI, 0.8);
   },
 
   explode(x, y, size, o = {}) {

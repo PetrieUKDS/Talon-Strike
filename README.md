@@ -71,6 +71,7 @@ The mouse also works for aiming and firing.
 ### Phones and tablets
 
 - **Twin-stick touch controls:** drag on the left half of the screen to fly and on the right half to aim. Auto-fire is on for touch by default, so your guns fire at anything in front of you. On-screen buttons cover missiles, flares, turbo and pause.
+- **Missile lock:** you don't need to point at a target to lock it. With touch, a controller or the turn keys, missiles lock the best enemy in range in any direction, favouring ones ahead. The lock holds while that enemy stays in range, and aiming straight at something else switches it. Homing missiles turn round to reach targets behind you. With the mouse, aiming picks the target.
 - **Landscape only:** if you hold the phone upright, the game pauses and asks you to rotate it. On Android it also goes full-screen on your first tap.
 - **Fits around the screen:** the buttons scale with the screen, and the HUD keeps clear of notches and the home bar.
 - **Vibration:** phones that support it buzz when you're hit.
