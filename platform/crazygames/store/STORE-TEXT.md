@@ -36,8 +36,8 @@ When the campaign is done, the war isn't. Contracts are endless missions built f
 | Action | Keyboard and mouse | Touch | Controller |
 |---|---|---|---|
 | Fly | WASD | Drag on the left half | Left stick |
-| Aim | Mouse, or ← → / Q E to turn | Drag on the right half | Right stick |
-| Chain guns | Left click or Space | Fire by themselves at anything ahead | Right trigger |
+| Aim | Mouse, or ← → / Q E to turn | Automatic, or drag on the right half | Right stick |
+| Chain guns | Left click or Space | Fire by themselves | Right trigger |
 | Missiles | Right click or ↓ / K | MSL button | Left trigger |
 | Flares | F | FLR button | Right bumper |
 | Turbo | Shift | TRB button | Left bumper |

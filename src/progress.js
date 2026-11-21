@@ -27,9 +27,9 @@ const SAVE_KEY = 'chopperGunner.save';
 const SETTINGS_KEY = 'chopperGunner.settings';
 
 // Player preferences, kept apart from the campaign save. Volumes run 0-10.
-// autofire: null means on for touch controls only. effects: 'auto', 'high' or 'low'.
+// autofire and autoaim: null means on for touch controls only. effects: 'auto', 'high' or 'low'.
 const Settings = {
-  data: { v: 2, music: 7, sfx: 8, shake: true, autofire: null, effects: 'auto', vibrate: true, tutorial: true },
+  data: { v: 2, music: 7, sfx: 8, shake: true, autofire: null, autoaim: null, effects: 'auto', vibrate: true, tutorial: true },
 
   load() {
     try {

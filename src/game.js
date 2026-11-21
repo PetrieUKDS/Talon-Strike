@@ -21,7 +21,7 @@ const TUTORIAL = [
     done: (g, t) => dist(g.player.x, g.player.y, g.base.x, g.base.y) > 350,
   },
   {
-    hint: (g) => (Input.touchMode ? 'Drag on the RIGHT half to aim - your guns fire at anything in front of you'
+    hint: (g) => (Input.touchMode ? 'You turn to face the nearest enemy and fire by yourself. Drag on the RIGHT half to pick a target'
       : Input.pad ? 'RIGHT STICK aims, RIGHT TRIGGER fires the chain guns'
       : `Aim with the MOUSE (or ${Input.bindLabel('turnLeft')} ${Input.bindLabel('turnRight')}), fire with ${Input.bindLabel('fire')} or LEFT CLICK`),
     done: (g, t) => t.fired > 0.8,
@@ -614,6 +614,7 @@ const G = {
       c.mx += m.x;
       c.my += m.y;
       const a = Input.stick('aim');
+      c.aiming = a.mag > 0.2;
       if (a.mag > 0.2) {
         const ang = Math.atan2(a.y, a.x);
         c.aimX = p.x + Math.cos(ang) * 300;
@@ -624,6 +625,7 @@ const G = {
       const turn = (Input.action('turnRight') ? 1 : 0) - (Input.action('turnLeft') ? 1 : 0);
       if (turn) this.aimMode = 'keys';
       else if (Input.mouseMoved || Input.mouse.left || Input.mouse.right || Input.hit('Mouse0')) this.aimMode = 'mouse';
+      c.aiming = !!turn || this.aimMode === 'mouse';
       if (this.aimMode === 'keys') {
         p.aimAngle += turn * 3.6 * dt;
         c.aimX = p.x + Math.cos(p.aimAngle) * 300;
@@ -642,6 +644,7 @@ const G = {
       c.mx += pad.lx;
       c.my += pad.ly;
       if (Math.hypot(pad.rx, pad.ry) > 0.35) {
+        c.aiming = true;
         const ang = Math.atan2(pad.ry, pad.rx);
         p.aimAngle = ang;
         c.aimX = p.x + Math.cos(ang) * 300;
@@ -654,6 +657,24 @@ const G = {
       c.flare = c.flare || pad.flareHit;
       c.turbo = c.turbo || pad.turbo;
     }
+    // Auto-aim: while the player isn't aiming, turn to face the best target, leading it a little; with
+    // nothing near, face the way you're flying. Aiming yourself (right thumb, right stick, turn keys,
+    // mouse) always wins. On by default for touch, where steering the nose needs a second thumb that's
+    // also wanted for the missile, flare and turbo buttons.
+    const autoAim = Settings.data.autoaim === null || Settings.data.autoaim === undefined ? Input.touchMode : Settings.data.autoaim;
+    if (autoAim && !c.aiming) {
+      const t = this.autoAimTarget(p);
+      if (t) {
+        const lead = dist(p.x, p.y, t.x, t.y) / 900;
+        c.aimX = t.x + (t.vx || 0) * lead;
+        c.aimY = t.y + (t.vy || 0) * lead;
+        p.aimAngle = Math.atan2(c.aimY - p.y, c.aimX - p.x);
+      } else if (Math.hypot(c.mx, c.my) > 0.3) {
+        c.aimX = p.x + c.mx * 300;
+        c.aimY = p.y + c.my * 300;
+        p.aimAngle = Math.atan2(c.my, c.mx);
+      }
+    }
     // Auto-fire: the guns open up on their own at whatever sits in front of the nose, and
     // the rounds get the same steer onto it that keyboard and pad players get.
     const auto = Settings.data.autofire === null ? Input.touchMode : Settings.data.autofire;
@@ -663,6 +684,14 @@ const G = {
       c.assist = true;
     }
     return c;
+  },
+
+  // Who auto-aim faces: the missile lock while it's alive and near, else the best enemy within 650
+  // in any direction, favouring ones already ahead so the nose doesn't swing about.
+  autoAimTarget(p) {
+    const cur = this.lockTarget;
+    if (cur && !cur.dead && this.enemies.includes(cur) && dist(cur.x, cur.y, p.x, p.y) < 700) return cur;
+    return this.findTarget(p.x, p.y, p.angle, 650, Math.PI, 0.8);
   },
 
   // The enemy the guns would hit: in range, with either where it is or where it will be when
@@ -899,6 +928,7 @@ const G = {
       { label: 'MUSIC VOLUME', ...vol('music') },
       { label: 'SOUND VOLUME', ...vol('sfx') },
       { label: 'AUTO-FIRE', ...cycle('autofire', [null, true, false], ['TOUCH', 'ON', 'OFF']), note: 'Guns fire by themselves at targets ahead. TOUCH: only with touch controls' },
+      { label: 'AUTO-AIM', ...cycle('autoaim', [null, true, false], ['TOUCH', 'ON', 'OFF']), note: 'Turn to face the nearest target whenever you are not aiming yourself' },
       { label: 'EFFECTS', ...cycle('effects', ['auto', 'high', 'low'], ['AUTO', 'HIGH', 'LOW']), note: 'LOW cuts particles and weather for slower phones. AUTO switches if needed', apply: () => this.resize() },
       { label: 'SCREEN SHAKE', ...flag('shake') },
       { label: 'VIBRATION', ...flag('vibrate'), note: 'Buzz when you are hit (phones that support it)' },
@@ -1954,7 +1984,7 @@ const G = {
     ctx.strokeRect(bx, by, bw, bh);
     Hud.text(ctx, 'PLAY', w / 2, by + bh / 2 + (small ? 9 : 12), { size: small ? 26 : 34, align: 'center', font: TITLE_FONT, weight: '900', color: HUD_GREEN });
     const touch = Input.touchMode || ('ontouchstart' in window && w < 900);
-    const hint = touch ? 'Left thumb flies   right thumb aims - guns fire by themselves'
+    const hint = touch ? 'Left thumb flies - you aim and fire by yourself'
       : 'WASD fly   mouse aims   click or SPACE fires';
     Hud.text(ctx, hint, w / 2, by + bh + 30, { size: small ? 12 : 14, align: 'center', color: '#c8d6dc' });
   },

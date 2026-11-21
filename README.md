@@ -70,7 +70,7 @@ The mouse also works for aiming and firing.
 
 ### Phones and tablets
 
-- **Twin-stick touch controls:** drag on the left half of the screen to fly and on the right half to aim. Auto-fire is on for touch by default, so your guns fire at anything in front of you. On-screen buttons cover missiles, flares, turbo and pause.
+- **Twin-stick touch controls:** drag on the left half of the screen to fly. Auto-aim and auto-fire are on for touch by default, so your aircraft turns to the nearest enemy and shoots by itself, and one thumb is enough to fight. Drag on the right half to aim yourself. On-screen buttons cover missiles, flares, turbo and pause.
 - **Missile lock:** you don't need to point at a target to lock it. With touch, a controller or the turn keys, missiles lock the best enemy in range in any direction, favouring ones ahead. The lock holds while that enemy stays in range, and aiming straight at something else switches it. Homing missiles turn round to reach targets behind you. With the mouse, aiming picks the target.
 - **Landscape only:** if you hold the phone upright, the game pauses and asks you to rotate it. On Android it also goes full-screen on your first tap.
 - **Fits around the screen:** the buttons scale with the screen, and the HUD keeps clear of notches and the home bar.
@@ -101,6 +101,7 @@ Land on your base pad to repair and rearm. Your guns overheat if you hold the tr
 | Music volume | 0–10 |
 | Sound volume | 0–10, for everything except the music |
 | Auto-fire | **TOUCH** (default): on with touch controls only. **ON**: always. **OFF**: never. Your guns fire by themselves whenever a target is in front of your nose and in range, so you only have to aim. Handy on a touchpad too. |
+| Auto-aim | **TOUCH** (default), **ON** or **OFF**, like auto-fire. When you aren't aiming yourself, your aircraft turns to face the nearest target, leading it a little, and faces the way you're flying when nothing is near. Aiming yourself (right thumb, right stick, turn keys or mouse) always takes over. With auto-fire too, phones need only the left thumb to fly and fight, which leaves the right thumb free for the buttons. |
 | Effects | **AUTO** (default) starts on high and switches to low by itself if the game runs below about 40 frames a second. **HIGH** or **LOW** fixes it. Low draws at normal resolution on high-density screens, and halves the particles and weather. |
 | Screen shake | Turn the camera shake from explosions and hits on or off |
 | Vibration | Buzz when you're hit, on phones that support it |
